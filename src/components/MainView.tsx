@@ -26,6 +26,7 @@ interface MainViewProps {
 export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimulation }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
@@ -38,6 +39,8 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
   const recorderRef = useRef<CanvasRecorder>(new CanvasRecorder());
 
+  const latestHandsRef = useRef<HandLandmarks[]>([]);
+
   const [isDemo, setIsDemo] = useState(initialMode === 'DEMO');
   const [isSimulated, setIsSimulated] = useState(initialUseSimulation);
   const [currentState, setCurrentState] = useState<VisualEffectState>(VisualEffectState.RECTANGLE_TRACKING);
@@ -45,7 +48,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const [isPaused, setIsPaused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showHUD, setShowHUD] = useState(true);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [perfMetrics, setPerfMetrics] = useState<PerformanceMetrics>({
@@ -53,7 +56,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     visionFps: 30,
     visionLatencyMs: 12,
     frameTimeMs: 16.6,
-    qualityLevel: 'HIGH',
+    qualityLevel: 'AUTO',
     activeParticles: 350,
     glslPasses: 3
   });
@@ -108,26 +111,25 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     window.addEventListener('resize', handleResize);
 
     let isCancelled = false;
-    const initVision = async () => {
+
+    const initCameraAndVision = async () => {
       await visionServiceRef.current.initialize();
 
-      if (!initialUseSimulation) {
+      if (!initialUseSimulation && videoRef.current) {
         try {
-          const video = await cameraManagerRef.current.startCamera();
-          if (!isCancelled) {
-            scene.setVideoSource(video);
+          const stream = await cameraManagerRef.current.startCamera();
+          if (!isCancelled && videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play().catch(() => {});
+            scene.setVideoSource(videoRef.current);
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (msg.includes('interrupted') || msg.includes('AbortError')) {
-            console.warn('Benign mount interruption, continuing:', msg);
-          } else {
-            console.warn('Camera failed to start, falling back to simulated hands:', err);
-            if (!isCancelled) {
-              setErrorMessage(msg);
-              setIsSimulated(true);
-              scene.setVideoSource(null);
-            }
+          console.warn('Camera failed, falling back to simulation:', err);
+          if (!isCancelled) {
+            setErrorMessage(msg);
+            setIsSimulated(true);
+            scene.setVideoSource(null);
           }
         }
       } else {
@@ -135,7 +137,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       }
     };
 
-    initVision();
+    initCameraAndVision();
 
     return () => {
       isCancelled = true;
@@ -143,6 +145,50 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       window.removeEventListener('resize', handleResize);
     };
   }, [initialUseSimulation]);
+
+  useEffect(() => {
+    let visionTimer: NodeJS.Timeout;
+    let isRunning = true;
+
+    const runVisionStep = () => {
+      if (!isRunning) return;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const timestamp = performance.now();
+      const vStart = performance.now();
+
+      let hands: HandLandmarks[] = [];
+
+      if (isSimulated) {
+        hands = simTrackerRef.current.getSimulatedHands(width, height);
+      } else {
+        const video = videoRef.current;
+        if (video && video.readyState >= 2 && !video.paused) {
+          hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
+        }
+        if (hands.length === 0 && isSimulated) {
+          hands = simTrackerRef.current.getSimulatedHands(width, height);
+        }
+      }
+
+      latestHandsRef.current = hands;
+      setHandCount(hands.length);
+
+      const gestures = gestureEngineRef.current.processHands(hands, width, height);
+      setGestureMetrics(gestures);
+
+      const latency = performance.now() - vStart;
+      perfMonitorRef.current.recordVisionSample(latency);
+
+      visionTimer = setTimeout(runVisionStep, 28);
+    };
+
+    runVisionStep();
+    return () => {
+      isRunning = false;
+      clearTimeout(visionTimer);
+    };
+  }, [isSimulated]);
 
   useEffect(() => {
     let animId: number;
@@ -167,44 +213,27 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         setCurrentState(stateMachineRef.current.getCurrentState());
       }
 
-      let hands: HandLandmarks[] = [];
-      const visionStart = performance.now();
-
-      if (isSimulated) {
-        hands = simTrackerRef.current.getSimulatedHands(width, height);
-      } else {
-        const video = cameraManagerRef.current.getVideo();
-        if (video && cameraManagerRef.current.getIsReady()) {
-          hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
-        }
-        if (hands.length === 0 && isSimulated) {
-          hands = simTrackerRef.current.getSimulatedHands(width, height);
-        }
-      }
-      const visionLatency = performance.now() - visionStart;
-      setHandCount(hands.length);
-
+      const hands = latestHandsRef.current;
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
-      setGestureMetrics(gestures);
 
       if (sceneManagerRef.current) {
         sceneManagerRef.current.updateAndRender(hands, stateMachineRef.current, timestamp / 1000.0);
       }
 
       if (hudRef.current && showHUD) {
-        hudRef.current.render(hands, gestures, stateMachineRef.current.getCurrentState(), hudOptionsRef.current, perfMetrics.renderFps);
+        hudRef.current.render(hands, gestures, stateMachineRef.current.getCurrentState(), hudOptionsRef.current, perfMetrics.renderFps, timestamp / 1000.0);
       } else if (hudRef.current && !showHUD) {
         const ctx = hudCanvasRef.current?.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, width, height);
       }
 
-      const metrics = perfMonitorRef.current.update(visionLatency);
+      const metrics = perfMonitorRef.current.update(0);
       setPerfMetrics(metrics);
     };
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isDemo, isSimulated, isPaused, showHUD, perfMetrics.renderFps]);
+  }, [isDemo, isPaused, showHUD, perfMetrics.renderFps]);
 
   const handleSelectState = useCallback((state: VisualEffectState) => {
     if (isDemo && demoTimelineRef.current) {
@@ -230,15 +259,17 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const handleToggleSimulation = useCallback(async () => {
     setIsSimulated(prev => {
       const next = !prev;
-      if (!next) {
-        cameraManagerRef.current.startCamera().then(video => {
-          sceneManagerRef.current?.setVideoSource(video);
+      if (!next && videoRef.current) {
+        cameraManagerRef.current.startCamera().then(stream => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(() => {});
+            sceneManagerRef.current?.setVideoSource(videoRef.current);
+          }
         }).catch(err => {
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('interrupted') && !msg.includes('AbortError')) {
-            setErrorMessage(msg);
-            setIsSimulated(true);
-          }
+          setErrorMessage(msg);
+          setIsSimulated(true);
         });
       } else {
         cameraManagerRef.current.stopCamera();
@@ -294,9 +325,36 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{
+          position: 'fixed',
+          top: '-9999px',
+          left: '-9999px',
+          width: '640px',
+          height: '360px',
+          opacity: 0,
+          pointerEvents: 'none'
+        }}
+      />
+
       <div ref={containerRef} className="absolute inset-0 z-0" />
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
       <div className="absolute inset-0 z-20 scanline-overlay pointer-events-none" />
+
+      <div className="absolute top-4 left-4 z-30 flex items-center space-x-3 pointer-events-none">
+        <div className="px-3 py-1 bg-black/60 backdrop-blur-md border border-cyan-500/40 rounded text-cyan-400 font-mono text-xs tracking-wider flex items-center space-x-2">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-bold">HANDFLUX</span>
+          <span className="text-white/40">|</span>
+          <span className="text-white/70">{isDemo ? '34s DEMO' : 'LIVE AR'}</span>
+          <span className="text-white/40">|</span>
+          <span className="text-pink-400 font-bold">{currentState}</span>
+        </div>
+      </div>
 
       {showDebug && (
         <DebugHUD

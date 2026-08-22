@@ -4,49 +4,50 @@ import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 
 export class GlowingBlocksMesh {
   public group: THREE.Group;
-  private pinkBlock: THREE.Mesh;
-  private pinkWire: THREE.LineSegments;
-  private greenBlock: THREE.Mesh;
-  private greenWire: THREE.LineSegments;
-  private pinkPos: THREE.Vector3 = new THREE.Vector3(1.2, 0.8, 0);
-  private greenPos: THREE.Vector3 = new THREE.Vector3(-0.8, -0.4, 0);
+  private magentaCube: THREE.Mesh;
+  private magentaWire: THREE.LineSegments;
+  private mintCuboid: THREE.Mesh;
+  private mintWire: THREE.LineSegments;
+
+  private currentMagentaPos: THREE.Vector3 = new THREE.Vector3(1.2, 0.2, 0);
+  private currentMintPos: THREE.Vector3 = new THREE.Vector3(-1.2, -0.1, 0);
 
   constructor() {
     this.group = new THREE.Group();
 
-    // 1. Bright Pink / Magenta Emissive Cube (Upper/Right)
-    const pinkGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-    const pinkMat = new THREE.MeshStandardMaterial({
+    const cubeGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+    const magentaMat = new THREE.MeshStandardMaterial({
       color: 0xff007f,
       emissive: 0xff007f,
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 0.9,
       roughness: 0.1,
       metalness: 0.2,
       transparent: true,
       opacity: 0.85
     });
-    this.pinkBlock = new THREE.Mesh(pinkGeo, pinkMat);
-    const pinkWireGeo = new THREE.EdgesGeometry(pinkGeo);
-    this.pinkWire = new THREE.LineSegments(pinkWireGeo, new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.9 }));
-    this.pinkBlock.add(this.pinkWire);
-    this.group.add(this.pinkBlock);
+    this.magentaCube = new THREE.Mesh(cubeGeo, magentaMat);
+    const magWireGeo = new THREE.EdgesGeometry(cubeGeo);
+    const magWireMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.95 });
+    this.magentaWire = new THREE.LineSegments(magWireGeo, magWireMat);
+    this.magentaCube.add(this.magentaWire);
+    this.group.add(this.magentaCube);
 
-    // 2. Mint / Cyan / Green Luminous Cuboid (Lower/Center)
-    const greenGeo = new THREE.BoxGeometry(1.2, 0.5, 0.5);
-    const greenMat = new THREE.MeshStandardMaterial({
-      color: 0x00ffaa,
+    const cuboidGeo = new THREE.BoxGeometry(0.7, 1.4, 0.7);
+    const mintMat = new THREE.MeshStandardMaterial({
+      color: 0x00ff88,
       emissive: 0x00ff88,
-      emissiveIntensity: 0.7,
-      roughness: 0.15,
-      metalness: 0.1,
+      emissiveIntensity: 0.9,
+      roughness: 0.1,
+      metalness: 0.2,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.85
     });
-    this.greenBlock = new THREE.Mesh(greenGeo, greenMat);
-    const greenWireGeo = new THREE.EdgesGeometry(greenGeo);
-    this.greenWire = new THREE.LineSegments(greenWireGeo, new THREE.LineBasicMaterial({ color: 0xecfdf5, linewidth: 2, transparent: true, opacity: 0.85 }));
-    this.greenBlock.add(this.greenWire);
-    this.group.add(this.greenBlock);
+    this.mintCuboid = new THREE.Mesh(cuboidGeo, mintMat);
+    const mintWireGeo = new THREE.EdgesGeometry(cuboidGeo);
+    const mintWireMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.95 });
+    this.mintWire = new THREE.LineSegments(mintWireGeo, mintWireMat);
+    this.mintCuboid.add(this.mintWire);
+    this.group.add(this.mintCuboid);
 
     this.group.visible = false;
   }
@@ -64,37 +65,35 @@ export class GlowingBlocksMesh {
     }
     this.group.visible = true;
 
-    let targetPink = new THREE.Vector3(1.2, 0.6 + Math.sin(time * 2.0) * 0.15, 0);
-    let targetGreen = new THREE.Vector3(-0.5, -0.4 + Math.cos(time * 1.8) * 0.15, 0);
+    let targetMag = new THREE.Vector3(1.3 + Math.sin(time) * 0.2, 0.3 + Math.cos(time * 1.2) * 0.2, 0);
+    let targetMint = new THREE.Vector3(-1.3 - Math.sin(time) * 0.2, -0.1 + Math.sin(time * 1.5) * 0.2, 0);
 
     if (hands.length >= 2) {
-      const rightHand = hands[0].palmCenter.x > hands[1].palmCenter.x ? hands[0] : hands[1];
-      const leftHand = rightHand === hands[0] ? hands[1] : hands[0];
-
-      const rWorld = screenToThreeWorld(rightHand.indexTip.screenX, rightHand.indexTip.screenY, screenWidth, screenHeight);
-      const lWorld = screenToThreeWorld(leftHand.palmCenter.screenX, leftHand.palmCenter.screenY, screenWidth, screenHeight);
-
-      targetPink.set(rWorld.x + 0.3, rWorld.y + 0.4, rWorld.z + 0.2);
-      targetGreen.set(lWorld.x, lWorld.y - 0.3, lWorld.z - 0.1);
+      const right = hands[0].palmCenter.x > hands[1].palmCenter.x ? hands[0] : hands[1];
+      const left = right === hands[0] ? hands[1] : hands[0];
+      const rW = screenToThreeWorld(right.palmCenter.screenX, right.palmCenter.screenY, screenWidth, screenHeight);
+      const lW = screenToThreeWorld(left.palmCenter.screenX, left.palmCenter.screenY, screenWidth, screenHeight);
+      targetMag.set(rW.x + 0.3, rW.y + 0.2, rW.z);
+      targetMint.set(lW.x - 0.3, lW.y + 0.2, lW.z);
     } else if (hands.length === 1) {
       const h = hands[0];
-      const world = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
-      targetPink.set(world.x + 0.8, world.y + 0.3, world.z);
-      targetGreen.set(world.x - 0.6, world.y - 0.4, world.z);
+      const w = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
+      targetMag.set(w.x + 0.5, w.y + 0.3, w.z);
+      targetMint.set(w.x - 0.5, w.y - 0.2, w.z);
     }
 
-    this.pinkPos.lerp(targetPink, 0.15);
-    this.greenPos.lerp(targetGreen, 0.15);
+    this.currentMagentaPos.lerp(targetMag, 0.16);
+    this.currentMintPos.lerp(targetMint, 0.16);
 
-    this.pinkBlock.position.copy(this.pinkPos);
-    this.pinkBlock.rotation.x = time * 0.7;
-    this.pinkBlock.rotation.y = time * 0.9;
+    this.magentaCube.position.copy(this.currentMagentaPos);
+    this.magentaCube.rotation.x = time * 0.8;
+    this.magentaCube.rotation.y = time * 1.1;
 
-    this.greenBlock.position.copy(this.greenPos);
-    this.greenBlock.rotation.y = -time * 0.6;
-    this.greenBlock.rotation.z = Math.sin(time) * 0.2;
+    this.mintCuboid.position.copy(this.currentMintPos);
+    this.mintCuboid.rotation.y = time * 0.9;
+    this.mintCuboid.rotation.z = Math.sin(time * 0.8) * 0.3;
 
-    (this.pinkBlock.material as THREE.MeshStandardMaterial).opacity = opacity * 0.85;
-    (this.greenBlock.material as THREE.MeshStandardMaterial).opacity = opacity * 0.8;
+    (this.magentaCube.material as THREE.MeshStandardMaterial).opacity = opacity * 0.88;
+    (this.mintCuboid.material as THREE.MeshStandardMaterial).opacity = opacity * 0.88;
   }
 }

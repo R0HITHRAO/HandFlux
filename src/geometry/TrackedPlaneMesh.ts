@@ -1,57 +1,39 @@
 import * as THREE from 'three';
 import { HalftoneShader } from '../shaders/halftoneShader';
 import { HandLandmarks } from '../types/vision';
-import { screenToThreeWorld } from '../utils/mathUtils';
+import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 
 export class TrackedPlaneMesh {
   public group: THREE.Group;
   private mesh: THREE.Mesh;
   private wireframe: THREE.LineSegments;
   private material: THREE.ShaderMaterial;
-  private geometry: THREE.BufferGeometry;
+  private geometry: THREE.PlaneGeometry;
 
   constructor() {
     this.group = new THREE.Group();
-
-    // 4-vertex deformable Quad Plane
-    this.geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array([
-      -1,  0.5, 0,
-       1,  0.5, 0,
-      -1, -0.5, 0,
-       1, -0.5, 0
-    ]);
-    const uvs = new Float32Array([
-      0, 1,
-      1, 1,
-      0, 0,
-      1, 0
-    ]);
-    const indices = [
-      0, 2, 1,
-      2, 3, 1
-    ];
-
-    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    this.geometry.setIndex(indices);
-    this.geometry.computeVertexNormals();
+    this.geometry = new THREE.PlaneGeometry(3.2, 1.4, 4, 4);
 
     this.material = new THREE.ShaderMaterial({
-      uniforms: THREE.UniformsUtils.clone(HalftoneShader.uniforms),
+      uniforms: {
+        uTime: { value: 0.0 },
+        uOpacity: { value: 0.0 },
+        uColorPrimary: { value: new THREE.Color(0x00d2ff) },
+        uColorSecondary: { value: new THREE.Color(0xb829ea) },
+        uMode: { value: 0 }
+      },
       vertexShader: HalftoneShader.vertexShader,
       fragmentShader: HalftoneShader.fragmentShader,
       transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false
+      depthWrite: false,
+      side: THREE.DoubleSide
     });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.group.add(this.mesh);
 
-    // Subtle edge border wireframe
-    const wireGeo = new THREE.EdgesGeometry(this.geometry);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, linewidth: 2 });
+    const wireGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(3.2, 1.4));
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x00f5ff, linewidth: 2, transparent: true, opacity: 0.9 });
     this.wireframe = new THREE.LineSegments(wireGeo, wireMat);
     this.group.add(this.wireframe);
 
@@ -63,8 +45,8 @@ export class TrackedPlaneMesh {
     screenWidth: number,
     screenHeight: number,
     time: number,
-    mode: number = 0, // 0: Hatching (0-4s), 1: Pink dots (18-22s)
-    opacity: number = 1.0
+    mode: number,
+    opacity: number
   ): void {
     if (opacity <= 0.01) {
       this.group.visible = false;
@@ -73,51 +55,47 @@ export class TrackedPlaneMesh {
     this.group.visible = true;
 
     this.material.uniforms.uTime.value = time;
-    this.material.uniforms.uMode.value = mode;
     this.material.uniforms.uOpacity.value = opacity;
+    this.material.uniforms.uMode.value = mode;
 
-    let p0 = { x: -1.5, y:  0.4, z: 0 }; // Top-Left
-    let p1 = { x:  1.5, y:  0.4, z: 0 }; // Top-Right
-    let p2 = { x: -1.5, y: -0.4, z: 0 }; // Bottom-Left
-    let p3 = { x:  1.5, y: -0.4, z: 0 }; // Bottom-Right
-
-    if (hands.length >= 2) {
-      const leftHand = hands[0].palmCenter.x < hands[1].palmCenter.x ? hands[0] : hands[1];
-      const rightHand = leftHand === hands[0] ? hands[1] : hands[0];
-
-      // Map corners to fingertips & wrists
-      p0 = screenToThreeWorld(leftHand.indexTip.screenX, leftHand.indexTip.screenY - 20, screenWidth, screenHeight);
-      p1 = screenToThreeWorld(rightHand.indexTip.screenX, rightHand.indexTip.screenY - 20, screenWidth, screenHeight);
-      p2 = screenToThreeWorld(leftHand.thumbTip.screenX - 20, leftHand.wrist.screenY, screenWidth, screenHeight);
-      p3 = screenToThreeWorld(rightHand.thumbTip.screenX + 20, rightHand.wrist.screenY, screenWidth, screenHeight);
-
-      this.material.uniforms.uHandVelocity.value = (leftHand.velocity.speed + rightHand.velocity.speed) * 0.5;
-    } else if (hands.length === 1) {
-      const h = hands[0];
-      const c = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
-      const halfW = (h.boundingBox.width / screenWidth) * 4.0;
-      const halfH = (h.boundingBox.height / screenHeight) * 3.0;
-
-      p0 = { x: c.x - halfW, y: c.y + halfH, z: 0 };
-      p1 = { x: c.x + halfW, y: c.y + halfH, z: 0 };
-      p2 = { x: c.x - halfW, y: c.y - halfH, z: 0 };
-      p3 = { x: c.x + halfW, y: c.y - halfH, z: 0 };
-      this.material.uniforms.uHandVelocity.value = h.velocity.speed;
+    if (mode === 0) {
+      this.material.uniforms.uColorPrimary.value.setHex(0x00f5ff);
+      this.material.uniforms.uColorSecondary.value.setHex(0xb829ea);
+      (this.wireframe.material as THREE.LineBasicMaterial).color.setHex(0x00f5ff);
+    } else {
+      this.material.uniforms.uColorPrimary.value.setHex(0xff007f);
+      this.material.uniforms.uColorSecondary.value.setHex(0xff4081);
+      (this.wireframe.material as THREE.LineBasicMaterial).color.setHex(0xff007f);
     }
 
-    const posAttr = this.geometry.attributes.position as THREE.BufferAttribute;
-    const arr = posAttr.array as Float32Array;
+    let targetCenter = new THREE.Vector3(0, 0, 0);
+    let targetWidth = 3.2;
+    let targetHeight = 1.4;
+    let targetRotationZ = 0;
 
-    arr[0] = p0.x; arr[1] = p0.y; arr[2] = p0.z;
-    arr[3] = p1.x; arr[4] = p1.y; arr[5] = p1.z;
-    arr[6] = p2.x; arr[7] = p2.y; arr[8] = p2.z;
-    arr[9] = p3.x; arr[10] = p3.y; arr[11] = p3.z;
+    if (hands.length >= 2) {
+      const left = hands[0].palmCenter.x < hands[1].palmCenter.x ? hands[0] : hands[1];
+      const right = left === hands[0] ? hands[1] : hands[0];
 
-    posAttr.needsUpdate = true;
-    this.geometry.computeVertexNormals();
+      const lWorld = screenToThreeWorld(left.palmCenter.screenX, left.palmCenter.screenY, screenWidth, screenHeight);
+      const rWorld = screenToThreeWorld(right.palmCenter.screenX, right.palmCenter.screenY, screenWidth, screenHeight);
 
-    // Refresh wireframe edges
-    this.wireframe.geometry.dispose();
-    this.wireframe.geometry = new THREE.EdgesGeometry(this.geometry);
+      targetCenter.set((lWorld.x + rWorld.x) * 0.5, (lWorld.y + rWorld.y) * 0.5, 0);
+      const dx = rWorld.x - lWorld.x;
+      const dy = rWorld.y - lWorld.y;
+      targetWidth = Math.max(1.8, Math.sqrt(dx * dx + dy * dy) * 1.3);
+      targetRotationZ = Math.atan2(dy, dx);
+    } else if (hands.length === 1) {
+      const h = hands[0];
+      const w = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
+      targetCenter.set(w.x, w.y, 0);
+      targetWidth = 2.4;
+    } else {
+      targetCenter.set(0, Math.sin(time * 1.5) * 0.1, 0);
+    }
+
+    this.group.position.lerp(targetCenter, 0.18);
+    this.group.rotation.z = lerp(this.group.rotation.z, targetRotationZ, 0.18);
+    this.group.scale.set(targetWidth / 3.2, targetHeight / 1.4, 1.0);
   }
 }

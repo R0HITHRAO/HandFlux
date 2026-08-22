@@ -1,55 +1,56 @@
 import * as THREE from 'three';
-import { GlowPrismShader } from '../shaders/glowPrismShader';
 import { HandLandmarks } from '../types/vision';
 import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 
 export class PurplePrismMesh {
   public group: THREE.Group;
-  private mesh: THREE.Mesh;
-  private outerFrame: THREE.LineSegments;
-  private innerPrism: THREE.Mesh;
-  private material: THREE.ShaderMaterial;
-  private currentPos: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
+  private outerPrism: THREE.Mesh;
+  private outerWire: THREE.LineSegments;
+  private innerDiamond: THREE.Mesh;
+  private innerWire: THREE.LineSegments;
+
+  private currentCenter: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
   private currentScale: number = 1.0;
 
   constructor() {
     this.group = new THREE.Group();
 
-    // Architectural Digital Crystal Prism (multi-faceted polyhedron)
-    const geom = new THREE.IcosahedronGeometry(1.4, 0);
-    this.material = new THREE.ShaderMaterial({
-      uniforms: THREE.UniformsUtils.clone(GlowPrismShader.uniforms),
-      vertexShader: GlowPrismShader.vertexShader,
-      fragmentShader: GlowPrismShader.fragmentShader,
+    const prismGeo = new THREE.CylinderGeometry(1.4, 1.8, 2.4, 6, 2, false);
+    const prismMat = new THREE.MeshStandardMaterial({
+      color: 0xc084fc,
+      emissive: 0x9333ea,
+      emissiveIntensity: 0.85,
+      roughness: 0.1,
+      metalness: 0.3,
       transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false
+      opacity: 0.82,
+      side: THREE.DoubleSide
     });
+    this.outerPrism = new THREE.Mesh(prismGeo, prismMat);
 
-    this.mesh = new THREE.Mesh(geom, this.material);
-    this.group.add(this.mesh);
+    const wireGeo = new THREE.EdgesGeometry(prismGeo);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2.5, transparent: true, opacity: 0.95 });
+    this.outerWire = new THREE.LineSegments(wireGeo, wireMat);
+    this.outerPrism.add(this.outerWire);
+    this.group.add(this.outerPrism);
 
-    // Thick structural dark purple edge frames
-    const edgeGeo = new THREE.EdgesGeometry(geom);
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0x581c87, // Deep violet
-      linewidth: 3,
+    const diamondGeo = new THREE.OctahedronGeometry(1.0, 0);
+    const diamondMat = new THREE.MeshStandardMaterial({
+      color: 0xf472b6,
+      emissive: 0xdb2777,
+      emissiveIntensity: 0.9,
+      roughness: 0.1,
+      metalness: 0.4,
       transparent: true,
-      opacity: 0.95
+      opacity: 0.85,
+      side: THREE.DoubleSide
     });
-    this.outerFrame = new THREE.LineSegments(edgeGeo, edgeMat);
-    this.group.add(this.outerFrame);
-
-    // Inner glowing core
-    const innerGeo = new THREE.OctahedronGeometry(0.8, 0);
-    const innerMat = new THREE.MeshBasicMaterial({
-      color: 0xf5d0fe, // Pale pink/white core
-      wireframe: true,
-      transparent: true,
-      opacity: 0.6
-    });
-    this.innerPrism = new THREE.Mesh(innerGeo, innerMat);
-    this.group.add(this.innerPrism);
+    this.innerDiamond = new THREE.Mesh(diamondGeo, diamondMat);
+    const diamondWireGeo = new THREE.EdgesGeometry(diamondGeo);
+    const diamondWireMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.95 });
+    this.innerWire = new THREE.LineSegments(diamondWireGeo, diamondWireMat);
+    this.innerDiamond.add(this.innerWire);
+    this.group.add(this.innerDiamond);
 
     this.group.visible = false;
   }
@@ -67,44 +68,38 @@ export class PurplePrismMesh {
     }
     this.group.visible = true;
 
-    this.material.uniforms.uTime.value = time;
-    this.material.uniforms.uOpacity.value = opacity;
-
-    let targetPos = new THREE.Vector3(0, 0, 0);
-    let targetScale = 1.2;
-    let targetRotZ = 0;
+    let targetCenter = new THREE.Vector3(0, Math.sin(time) * 0.15, 0);
+    let targetScale = 1.35;
 
     if (hands.length >= 2) {
       const h1 = hands[0];
       const h2 = hands[1];
-      const p1 = screenToThreeWorld(h1.palmCenter.screenX, h1.palmCenter.screenY, screenWidth, screenHeight);
-      const p2 = screenToThreeWorld(h2.palmCenter.screenX, h2.palmCenter.screenY, screenWidth, screenHeight);
+      const w1 = screenToThreeWorld(h1.palmCenter.screenX, h1.palmCenter.screenY, screenWidth, screenHeight);
+      const w2 = screenToThreeWorld(h2.palmCenter.screenX, h2.palmCenter.screenY, screenWidth, screenHeight);
 
-      targetPos.set((p1.x + p2.x) * 0.5, (p1.y + p2.y) * 0.5 + 0.3, 0);
-      const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
-      targetScale = Math.max(0.8, Math.min(2.2, dist * 0.8));
-      targetRotZ = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-      this.material.uniforms.uVelocity.value = (h1.velocity.speed + h2.velocity.speed) * 0.5;
+      targetCenter.set((w1.x + w2.x) * 0.5, (w1.y + w2.y) * 0.5, (w1.z + w2.z) * 0.5);
+      const dist = Math.sqrt((w2.x - w1.x) ** 2 + (w2.y - w1.y) ** 2);
+      targetScale = Math.max(1.0, dist * 0.95);
     } else if (hands.length === 1) {
       const h = hands[0];
-      const p = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
-      targetPos.set(p.x, p.y + 0.5, 0);
-      targetScale = 1.1;
-      this.material.uniforms.uVelocity.value = h.velocity.speed;
+      const w = screenToThreeWorld(h.palmCenter.screenX, h.palmCenter.screenY, screenWidth, screenHeight);
+      targetCenter.set(w.x, w.y, w.z);
+      targetScale = 1.2;
     }
 
-    this.currentPos.lerp(targetPos, 0.12);
-    this.currentScale = lerp(this.currentScale, targetScale, 0.12);
+    this.currentCenter.lerp(targetCenter, 0.16);
+    this.currentScale = lerp(this.currentScale, targetScale, 0.16);
 
-    this.group.position.copy(this.currentPos);
+    this.group.position.copy(this.currentCenter);
     this.group.scale.setScalar(this.currentScale);
 
-    this.mesh.rotation.y = time * 0.5;
-    this.mesh.rotation.x = time * 0.3;
-    this.mesh.rotation.z = targetRotZ;
+    this.outerPrism.rotation.y = time * 0.7;
+    this.outerPrism.rotation.x = Math.sin(time * 0.5) * 0.2;
 
-    this.innerPrism.rotation.y = -time * 0.8;
-    this.innerPrism.rotation.z = time * 0.6;
+    this.innerDiamond.rotation.y = -time * 1.2;
+    this.innerDiamond.rotation.z = Math.cos(time * 0.8) * 0.3;
+
+    (this.outerPrism.material as THREE.MeshStandardMaterial).opacity = opacity * 0.85;
+    (this.innerDiamond.material as THREE.MeshStandardMaterial).opacity = opacity * 0.88;
   }
 }
