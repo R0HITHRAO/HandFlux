@@ -86,7 +86,7 @@ export class CameraManager {
         await video.play();
       } catch (playErr: any) {
         if (playErr.name === 'AbortError' || String(playErr).includes('interrupted')) {
-          console.warn('Camera play() was interrupted by lifecycle change; ignoring AbortError.');
+          console.warn('Camera play() interrupted by lifecycle; ignoring AbortError.');
         } else {
           throw playErr;
         }
@@ -100,7 +100,6 @@ export class CameraManager {
       this.isReady = false;
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('interrupted') || msg.includes('AbortError')) {
-        console.warn('Handled benign play() interruption:', msg);
         if (this.videoElement) return this.videoElement;
       }
       throw new Error('Camera access error: ' + msg);

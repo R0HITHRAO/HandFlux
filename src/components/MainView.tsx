@@ -26,7 +26,6 @@ interface MainViewProps {
 export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimulation }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
@@ -115,13 +114,11 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     const initCameraAndVision = async () => {
       await visionServiceRef.current.initialize();
 
-      if (!initialUseSimulation && videoRef.current) {
+      if (!initialUseSimulation) {
         try {
-          const stream = await cameraManagerRef.current.startCamera();
-          if (!isCancelled && videoRef.current) {
-            videoRef.current.srcObject = stream;
-            await videoRef.current.play().catch(() => {});
-            scene.setVideoSource(videoRef.current);
+          const video = await cameraManagerRef.current.startCamera();
+          if (!isCancelled) {
+            scene.setVideoSource(video);
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -147,7 +144,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   }, [initialUseSimulation]);
 
   useEffect(() => {
-    let visionTimer: NodeJS.Timeout;
+    let visionTimer: ReturnType<typeof setTimeout>;
     let isRunning = true;
 
     const runVisionStep = () => {
@@ -155,15 +152,14 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       const width = window.innerWidth;
       const height = window.innerHeight;
       const timestamp = performance.now();
-      const vStart = performance.now();
 
       let hands: HandLandmarks[] = [];
 
       if (isSimulated) {
         hands = simTrackerRef.current.getSimulatedHands(width, height);
       } else {
-        const video = videoRef.current;
-        if (video && video.readyState >= 2 && !video.paused) {
+        const video = cameraManagerRef.current.getVideo();
+        if (video && cameraManagerRef.current.getIsReady()) {
           hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
         }
         if (hands.length === 0 && isSimulated) {
@@ -176,9 +172,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
       setGestureMetrics(gestures);
-
-      const latency = performance.now() - vStart;
-      perfMonitorRef.current.recordVisionSample(latency);
 
       visionTimer = setTimeout(runVisionStep, 28);
     };
@@ -259,13 +252,9 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const handleToggleSimulation = useCallback(async () => {
     setIsSimulated(prev => {
       const next = !prev;
-      if (!next && videoRef.current) {
-        cameraManagerRef.current.startCamera().then(stream => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(() => {});
-            sceneManagerRef.current?.setVideoSource(videoRef.current);
-          }
+      if (!next) {
+        cameraManagerRef.current.startCamera().then(video => {
+          sceneManagerRef.current?.setVideoSource(video);
         }).catch(err => {
           const msg = err instanceof Error ? err.message : String(err);
           setErrorMessage(msg);
@@ -325,22 +314,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{
-          position: 'fixed',
-          top: '-9999px',
-          left: '-9999px',
-          width: '640px',
-          height: '360px',
-          opacity: 0,
-          pointerEvents: 'none'
-        }}
-      />
-
       <div ref={containerRef} className="absolute inset-0 z-0" />
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
       <div className="absolute inset-0 z-20 scanline-overlay pointer-events-none" />
