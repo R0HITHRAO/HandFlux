@@ -5,10 +5,10 @@ import { HandLandmarkerService } from '../vision/HandLandmarkerService';
 import { SimulatedHandTracker } from '../vision/SimulatedHandTracker';
 import { GestureEngine } from '../vision/GestureEngine';
 import { CameraManager } from '../camera/CameraManager';
-import { EffectStateMachine } from '../state/EffectStateMachine';
+import { EffectManager } from '../state/EffectManager';
 import { DemoTimeline } from '../state/DemoTimeline';
 import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
-import { VisualEffectState } from '../types/effects';
+import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { PerformanceMetrics } from '../types/performance';
 import { GestureMetrics } from '../types/gestures';
 import { HandLandmarks } from '../types/vision';
@@ -24,25 +24,28 @@ interface MainViewProps {
 }
 
 export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimulation }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const arContainerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Engines
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
   const cameraManagerRef = useRef<CameraManager>(new CameraManager());
   const visionServiceRef = useRef<HandLandmarkerService>(new HandLandmarkerService());
   const simTrackerRef = useRef<SimulatedHandTracker>(new SimulatedHandTracker());
   const gestureEngineRef = useRef<GestureEngine>(new GestureEngine());
-  const stateMachineRef = useRef<EffectStateMachine>(new EffectStateMachine());
+  const effectManagerRef = useRef<EffectManager>(new EffectManager());
   const demoTimelineRef = useRef<DemoTimeline | null>(null);
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
   const recorderRef = useRef<CanvasRecorder>(new CanvasRecorder());
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
+  // States
   const [isDemo, setIsDemo] = useState(initialMode === 'DEMO');
   const [isSimulated, setIsSimulated] = useState(initialUseSimulation);
-  const [currentState, setCurrentState] = useState<VisualEffectState>(VisualEffectState.RECTANGLE_TRACKING);
+  const [currentMode, setCurrentMode] = useState<VisualEffectState>(VisualEffectState.RECTANGLE_TRACKING);
   const [demoTime, setDemoTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -81,17 +84,19 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     showBoundingBox: true
   });
 
+  // 1. Initialize Demo Timeline
   useEffect(() => {
-    demoTimelineRef.current = new DemoTimeline(stateMachineRef.current);
+    demoTimelineRef.current = new DemoTimeline(effectManagerRef.current);
     if (initialMode === 'DEMO') {
       demoTimelineRef.current.start();
     }
   }, [initialMode]);
 
+  // 2. Initialize Camera & Transparent Three.js WebGL Layer
   useEffect(() => {
-    if (!containerRef.current || !hudCanvasRef.current) return;
+    if (!arContainerRef.current || !hudCanvasRef.current || !videoRef.current) return;
 
-    const scene = new SceneManager(containerRef.current);
+    const scene = new SceneManager(arContainerRef.current);
     sceneManagerRef.current = scene;
 
     const hud = new TechnicalHUDCanvas(hudCanvasRef.current);
@@ -111,30 +116,24 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
     let isCancelled = false;
 
-    const initCameraAndVision = async () => {
+    const initVision = async () => {
       await visionServiceRef.current.initialize();
 
-      if (!initialUseSimulation) {
+      if (!initialUseSimulation && videoRef.current) {
         try {
-          const video = await cameraManagerRef.current.startCamera();
-          if (!isCancelled) {
-            scene.setVideoSource(video);
-          }
+          await cameraManagerRef.current.attachToVideo(videoRef.current);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.warn('Camera failed, falling back to simulation:', err);
+          console.warn('Camera failed, switching to simulation:', err);
           if (!isCancelled) {
             setErrorMessage(msg);
             setIsSimulated(true);
-            scene.setVideoSource(null);
           }
         }
-      } else {
-        scene.setVideoSource(null);
       }
     };
 
-    initCameraAndVision();
+    initVision();
 
     return () => {
       isCancelled = true;
@@ -143,6 +142,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     };
   }, [initialUseSimulation]);
 
+  // 3. Asynchronous Vision Tracking Loop (~30 FPS)
   useEffect(() => {
     let visionTimer: ReturnType<typeof setTimeout>;
     let isRunning = true;
@@ -158,7 +158,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       if (isSimulated) {
         hands = simTrackerRef.current.getSimulatedHands(width, height);
       } else {
-        const video = cameraManagerRef.current.getVideo();
+        const video = videoRef.current;
         if (video && cameraManagerRef.current.getIsReady()) {
           hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
         }
@@ -183,6 +183,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     };
   }, [isSimulated]);
 
+  // 4. Smooth 60 FPS Render Loop (Transparent AR over Camera)
   useEffect(() => {
     let animId: number;
     let lastTime = performance.now();
@@ -197,25 +198,35 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       const width = window.innerWidth;
       const height = window.innerHeight;
 
+      // Update EffectManager / Timeline
       if (isDemo && demoTimelineRef.current) {
         const update = demoTimelineRef.current.update(dt);
         setDemoTime(update.time);
-        setCurrentState(update.state);
+        setCurrentMode(update.state);
       } else {
-        stateMachineRef.current.update(dt);
-        setCurrentState(stateMachineRef.current.getCurrentState());
+        effectManagerRef.current.update(dt);
+        setCurrentMode(effectManagerRef.current.getMode());
       }
 
       const hands = latestHandsRef.current;
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
 
+      // Render 3D Perspective AR Geometries (Transparent Overlay)
       if (sceneManagerRef.current) {
-        sceneManagerRef.current.updateAndRender(hands, stateMachineRef.current, timestamp / 1000.0);
+        sceneManagerRef.current.updateAndRender(hands, effectManagerRef.current, timestamp / 1000.0);
       }
 
-      if (hudRef.current && showHUD) {
-        hudRef.current.render(hands, gestures, stateMachineRef.current.getCurrentState(), hudOptionsRef.current, perfMetrics.renderFps, timestamp / 1000.0);
-      } else if (hudRef.current && !showHUD) {
+      // Render 2D Technical HUD Overlay (Green Skeleton, Red Landmarks, Left Meter, Magenta FPS)
+      if (hudRef.current && showHUD && !effectManagerRef.current.isRawCamera()) {
+        hudRef.current.render(
+          hands,
+          gestures,
+          effectManagerRef.current.getMode(),
+          hudOptionsRef.current,
+          perfMetrics.renderFps,
+          timestamp / 1000.0
+        );
+      } else if (hudRef.current && (!showHUD || effectManagerRef.current.isRawCamera())) {
         const ctx = hudCanvasRef.current?.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, width, height);
       }
@@ -228,13 +239,14 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     return () => cancelAnimationFrame(animId);
   }, [isDemo, isPaused, showHUD, perfMetrics.renderFps]);
 
-  const handleSelectState = useCallback((state: VisualEffectState) => {
+  // Actions
+  const handleSelectMode = useCallback((mode: VisualEffectState) => {
     if (isDemo && demoTimelineRef.current) {
       demoTimelineRef.current.stop();
       setIsDemo(false);
     }
-    stateMachineRef.current.setState(state);
-    setCurrentState(state);
+    effectManagerRef.current.setMode(mode);
+    setCurrentMode(mode);
   }, [isDemo]);
 
   const handleToggleDemo = useCallback(() => {
@@ -252,17 +264,13 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const handleToggleSimulation = useCallback(async () => {
     setIsSimulated(prev => {
       const next = !prev;
-      if (!next) {
-        cameraManagerRef.current.startCamera().then(video => {
-          sceneManagerRef.current?.setVideoSource(video);
-        }).catch(err => {
-          const msg = err instanceof Error ? err.message : String(err);
-          setErrorMessage(msg);
+      if (!next && videoRef.current) {
+        cameraManagerRef.current.attachToVideo(videoRef.current).catch(err => {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
           setIsSimulated(true);
         });
       } else {
         cameraManagerRef.current.stopCamera();
-        sceneManagerRef.current?.setVideoSource(null);
       }
       return next;
     });
@@ -295,44 +303,83 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   useEffect(() => {
     return registerKeyboardShortcuts({
-      onSetState: handleSelectState,
+      onSetState: handleSelectMode,
       onToggleDemo: handleToggleDemo,
       onToggleSimulation: handleToggleSimulation,
       onToggleHUD: () => setShowHUD(p => !p),
       onToggleLandmarks: () => { hudOptionsRef.current.showLandmarks = !hudOptionsRef.current.showLandmarks; },
       onToggleCoordinates: () => { hudOptionsRef.current.showCoordinates = !hudOptionsRef.current.showCoordinates; },
       onToggleGuides: () => { hudOptionsRef.current.showGuides = !hudOptionsRef.current.showGuides; },
-      onToggleThermal: () => handleSelectState(VisualEffectState.THERMAL),
-      onTriggerBlur: () => handleSelectState(VisualEffectState.BLUR_TRANSITION),
+      onToggleThermal: () => handleSelectMode(VisualEffectState.THERMAL),
+      onTriggerBlur: () => handleSelectMode(VisualEffectState.BLUR_TRANSITION),
       onCapture: handleCapture,
       onToggleRecord: handleToggleRecord,
       onToggleFullscreen: handleToggleFullscreen,
       onTogglePause: () => setIsPaused(p => !p),
-      onReset: () => handleSelectState(VisualEffectState.RECTANGLE_TRACKING)
+      onReset: () => handleSelectMode(VisualEffectState.RECTANGLE_TRACKING)
     });
-  }, [handleSelectState, handleToggleDemo, handleToggleSimulation, handleCapture, handleToggleRecord, handleToggleFullscreen]);
+  }, [handleSelectMode, handleToggleDemo, handleToggleSimulation, handleCapture, handleToggleRecord, handleToggleFullscreen]);
+
+  // Video Filter for Thermal & Blur Shaders
+  const thermalOpacity = effectManagerRef.current.getThermalIntensity();
+  const blurOpacity = effectManagerRef.current.getBlurIntensity();
+  const videoFilterStyle = thermalOpacity > 0.05
+    ? `invert(${(thermalOpacity * 100).toFixed(0)}%) hue-rotate(${(thermalOpacity * 180).toFixed(0)}deg) saturate(${(100 + thermalOpacity * 300).toFixed(0)}%) contrast(${(100 + thermalOpacity * 80).toFixed(0)}%)`
+    : blurOpacity > 0.05
+    ? `blur(${(blurOpacity * 16).toFixed(0)}px)`
+    : 'none';
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
-      <div ref={containerRef} className="absolute inset-0 z-0" />
-      <canvas ref={hudCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
-      <div className="absolute inset-0 z-20 scanline-overlay pointer-events-none" />
+      {/* ========================================================================= */}
+      {/* LAYER 0: LIVE MIRRORED WEBCAM (FULL VIEWPORT - REAL PERSON & ROOM VISIBLE) */}
+      {/* ========================================================================= */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover z-0 transition-all duration-200"
+        style={{
+          transform: 'scaleX(-1)', // Real mirror reflection so left is left, right is right
+          filter: videoFilterStyle
+        }}
+      />
 
-      <div className="absolute top-4 left-4 z-30 flex items-center space-x-3 pointer-events-none">
+      {/* Fallback ambient grid only if camera is offline / test simulation */}
+      {isSimulated && (
+        <div className="absolute inset-0 z-0 tech-grid-bg opacity-30 pointer-events-none" />
+      )}
+
+      {/* ========================================================================= */}
+      {/* LAYER 1: TRANSPARENT 3D WebGL AR GEOMETRY (HATCH, WEDGES, BLOCKS, 3D FOLD)*/}
+      {/* ========================================================================= */}
+      <div ref={arContainerRef} className="absolute inset-0 z-10 pointer-events-none" />
+
+      {/* ========================================================================= */}
+      {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, MAGENTA FPS)*/}
+      {/* ========================================================================= */}
+      <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
+
+      {/* ========================================================================= */}
+      {/* LAYER 3: TOP MINIMAL BRAND STATUS BAR */}
+      {/* ========================================================================= */}
+      <div className="absolute top-4 right-4 z-30 flex items-center space-x-2 pointer-events-none">
         <div className="px-3 py-1 bg-black/60 backdrop-blur-md border border-cyan-500/40 rounded text-cyan-400 font-mono text-xs tracking-wider flex items-center space-x-2">
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           <span className="font-bold">HANDFLUX</span>
           <span className="text-white/40">|</span>
           <span className="text-white/70">{isDemo ? '34s DEMO' : 'LIVE AR'}</span>
           <span className="text-white/40">|</span>
-          <span className="text-pink-400 font-bold">{currentState}</span>
+          <span className="text-pink-400 font-bold">{currentMode}</span>
         </div>
       </div>
 
+      {/* Telemetry Debug Panel (Press D) */}
       {showDebug && (
         <DebugHUD
           performance={perfMetrics}
-          state={currentState}
+          state={currentMode}
           gestures={gestureMetrics}
           handCount={handCount}
           isSimulated={isSimulated}
@@ -341,15 +388,18 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         />
       )}
 
+      {/* ========================================================================= */}
+      {/* LAYER 4: BOTTOM FUNCTIONAL CONTROL BAR (EVERY BUTTON WORKS INSTANTLY)   */}
+      {/* ========================================================================= */}
       <ControlBar
-        currentState={currentState}
+        currentState={currentMode}
         isDemo={isDemo}
         demoTime={demoTime}
         isPaused={isPaused}
         isRecording={isRecording}
         showHUD={showHUD}
         isSimulated={isSimulated}
-        onSelectState={handleSelectState}
+        onSelectState={handleSelectMode}
         onToggleDemo={handleToggleDemo}
         onToggleSimulation={handleToggleSimulation}
         onTogglePause={() => setIsPaused(p => !p)}
@@ -357,9 +407,10 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         onToggleRecord={handleToggleRecord}
         onToggleHUD={() => setShowHUD(p => !p)}
         onToggleFullscreen={handleToggleFullscreen}
-        onReset={() => handleSelectState(VisualEffectState.RECTANGLE_TRACKING)}
+        onReset={() => handleSelectMode(VisualEffectState.RECTANGLE_TRACKING)}
       />
 
+      {/* Error Modal */}
       {errorMessage && (
         <ErrorModal
           message={errorMessage}
