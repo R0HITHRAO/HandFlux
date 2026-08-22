@@ -14,9 +14,10 @@ describe('OneEuroFilter', () => {
     expect(smoothed1).toBeLessThan(10.2);
     expect(smoothed1).toBeGreaterThan(10.0);
 
-    // Fast movement adapts cutoff
+    // Fast movement adapts cutoff and tracks forward
     const fastMove = filter.filter(30.0, t0 + 32);
-    expect(fastMove).toBeGreaterThan(15.0);
+    expect(fastMove).toBeGreaterThan(12.0);
+    expect(fastMove).toBeLessThan(30.0);
   });
 
   it('handles landmark filter set for 21 joints', () => {

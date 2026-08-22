@@ -1,4 +1,4 @@
-lass LowPassFilter {
+class LowPassFilter {
   private y: number = 0;
   private s: number = 0;
   private initialized: boolean = false;
