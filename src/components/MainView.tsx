@@ -27,7 +27,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const containerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Engines & Managers
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
   const cameraManagerRef = useRef<CameraManager>(new CameraManager());
@@ -39,7 +38,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
   const recorderRef = useRef<CanvasRecorder>(new CanvasRecorder());
 
-  // State
   const [isDemo, setIsDemo] = useState(initialMode === 'DEMO');
   const [isSimulated, setIsSimulated] = useState(initialUseSimulation);
   const [currentState, setCurrentState] = useState<VisualEffectState>(VisualEffectState.RECTANGLE_TRACKING);
@@ -73,7 +71,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   const [handCount, setHandCount] = useState(0);
 
-  // HUD options
   const hudOptionsRef = useRef<HUDOptions>({
     showLandmarks: true,
     showCoordinates: true,
@@ -82,7 +79,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     showBoundingBox: true
   });
 
-  // Initialize Timeline
   useEffect(() => {
     demoTimelineRef.current = new DemoTimeline(stateMachineRef.current);
     if (initialMode === 'DEMO') {
@@ -90,7 +86,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     }
   }, [initialMode]);
 
-  // Initialize Scene, Camera & Vision
   useEffect(() => {
     if (!containerRef.current || !hudCanvasRef.current) return;
 
@@ -123,11 +118,16 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
             scene.setVideoSource(video);
           }
         } catch (err: unknown) {
-          console.warn('Camera failed to start, falling back to simulated hands:', err);
-          if (!isCancelled) {
-            setErrorMessage(err instanceof Error ? err.message : 'Camera unavailable');
-            setIsSimulated(true);
-            scene.setVideoSource(null);
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('interrupted') || msg.includes('AbortError')) {
+            console.warn('Benign mount interruption, continuing:', msg);
+          } else {
+            console.warn('Camera failed to start, falling back to simulated hands:', err);
+            if (!isCancelled) {
+              setErrorMessage(msg);
+              setIsSimulated(true);
+              scene.setVideoSource(null);
+            }
           }
         }
       } else {
@@ -144,7 +144,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     };
   }, [initialUseSimulation]);
 
-  // Main Render & Vision Loop
   useEffect(() => {
     let animId: number;
     let lastTime = performance.now();
@@ -159,7 +158,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       const width = window.innerWidth;
       const height = window.innerHeight;
 
-      // 1. Update State Machine / Demo Timeline
       if (isDemo && demoTimelineRef.current) {
         const update = demoTimelineRef.current.update(dt);
         setDemoTime(update.time);
@@ -169,7 +167,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         setCurrentState(stateMachineRef.current.getCurrentState());
       }
 
-      // 2. Track Hands
       let hands: HandLandmarks[] = [];
       const visionStart = performance.now();
 
@@ -187,16 +184,13 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       const visionLatency = performance.now() - visionStart;
       setHandCount(hands.length);
 
-      // 3. Process Gestures
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
       setGestureMetrics(gestures);
 
-      // 4. Update Three.js 3D Objects & Post-Process Shaders
       if (sceneManagerRef.current) {
         sceneManagerRef.current.updateAndRender(hands, stateMachineRef.current, timestamp / 1000.0);
       }
 
-      // 5. Render 2D Technical HUD Overlay
       if (hudRef.current && showHUD) {
         hudRef.current.render(hands, gestures, stateMachineRef.current.getCurrentState(), hudOptionsRef.current, perfMetrics.renderFps);
       } else if (hudRef.current && !showHUD) {
@@ -204,7 +198,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         if (ctx) ctx.clearRect(0, 0, width, height);
       }
 
-      // 6. Update Performance Metrics
       const metrics = perfMonitorRef.current.update(visionLatency);
       setPerfMetrics(metrics);
     };
@@ -213,7 +206,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     return () => cancelAnimationFrame(animId);
   }, [isDemo, isSimulated, isPaused, showHUD, perfMetrics.renderFps]);
 
-  // Actions
   const handleSelectState = useCallback((state: VisualEffectState) => {
     if (isDemo && demoTimelineRef.current) {
       demoTimelineRef.current.stop();
@@ -242,8 +234,11 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         cameraManagerRef.current.startCamera().then(video => {
           sceneManagerRef.current?.setVideoSource(video);
         }).catch(err => {
-          setErrorMessage(err.message);
-          setIsSimulated(true);
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('interrupted') && !msg.includes('AbortError')) {
+            setErrorMessage(msg);
+            setIsSimulated(true);
+          }
         });
       } else {
         cameraManagerRef.current.stopCamera();
@@ -299,16 +294,10 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
-      {/* 3D WebGL Canvas Layer */}
       <div ref={containerRef} className="absolute inset-0 z-0" />
-
-      {/* 2D Technical HUD Overlay Canvas Layer */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-10 pointer-events-none" />
-
-      {/* CRT Scanline Overlay */}
       <div className="absolute inset-0 z-20 scanline-overlay pointer-events-none" />
 
-      {/* Telemetry Debug HUD */}
       {showDebug && (
         <DebugHUD
           performance={perfMetrics}
@@ -321,7 +310,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         />
       )}
 
-      {/* Bottom Control Bar */}
       <ControlBar
         currentState={currentState}
         isDemo={isDemo}
@@ -341,7 +329,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         onReset={() => handleSelectState(VisualEffectState.RECTANGLE_TRACKING)}
       />
 
-      {/* Error Modal */}
       {errorMessage && (
         <ErrorModal
           message={errorMessage}

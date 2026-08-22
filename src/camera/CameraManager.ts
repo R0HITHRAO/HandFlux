@@ -2,8 +2,14 @@ export class CameraManager {
   private videoElement: HTMLVideoElement | null = null;
   private mediaStream: MediaStream | null = null;
   private isReady: boolean = false;
+  private isStarting: boolean = false;
 
   constructor() {
+    this.createVideoElement();
+  }
+
+  private createVideoElement(): void {
+    if (this.videoElement) return;
     this.videoElement = document.createElement('video');
     this.videoElement.setAttribute('autoplay', 'true');
     this.videoElement.setAttribute('muted', 'true');
@@ -12,7 +18,6 @@ export class CameraManager {
     this.videoElement.autoplay = true;
     this.videoElement.playsInline = true;
     
-    // Position off-screen without display: none so GPU decodes texture
     this.videoElement.style.position = 'fixed';
     this.videoElement.style.top = '-9999px';
     this.videoElement.style.left = '-9999px';
@@ -26,40 +31,79 @@ export class CameraManager {
 
   public async startCamera(targetWidth: number = 1280, targetHeight: number = 720): Promise<HTMLVideoElement> {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Camera API (getUserMedia) not supported in this environment');
+      throw new Error('Camera API (getUserMedia) not supported in this browser/device');
     }
 
+    if (this.isReady && this.videoElement && this.videoElement.srcObject) {
+      return this.videoElement;
+    }
+
+    if (this.isStarting) {
+      await new Promise(r => setTimeout(r, 200));
+      if (this.videoElement) return this.videoElement;
+    }
+
+    this.isStarting = true;
+
     try {
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(t => t.stop());
+        this.mediaStream = null;
+      }
+
+      this.createVideoElement();
+      const video = this.videoElement!;
+
       const constraints: MediaStreamConstraints = {
         audio: false,
         video: {
-          width: { ideal: targetWidth, min: 640 },
-          height: { ideal: targetHeight, min: 360 },
+          width: { ideal: targetWidth, min: 480 },
+          height: { ideal: targetHeight, min: 270 },
           facingMode: 'user'
         }
       };
 
-      this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      if (this.videoElement) {
-        this.videoElement.srcObject = this.mediaStream;
-        await this.videoElement.play();
-        this.isReady = true;
-        return this.videoElement;
-      }
-      throw new Error('Video element failed to initialize');
-    } catch (err: unknown) {
+      let stream: MediaStream;
       try {
-        this.mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        if (this.videoElement) {
-          this.videoElement.srcObject = this.mediaStream;
-          await this.videoElement.play();
-          this.isReady = true;
-          return this.videoElement;
-        }
-      } catch (fallbackErr) {
-        throw new Error('Camera access denied or unavailable: ' + (err instanceof Error ? err.message : String(err)));
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (e) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       }
-      throw err;
+
+      this.mediaStream = stream;
+      video.srcObject = stream;
+
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 1) {
+          resolve();
+        } else {
+          video.onloadedmetadata = () => resolve();
+          setTimeout(resolve, 800);
+        }
+      });
+
+      try {
+        await video.play();
+      } catch (playErr: any) {
+        if (playErr.name === 'AbortError' || String(playErr).includes('interrupted')) {
+          console.warn('Camera play() was interrupted by lifecycle change; ignoring AbortError.');
+        } else {
+          throw playErr;
+        }
+      }
+
+      this.isReady = true;
+      this.isStarting = false;
+      return video;
+    } catch (err: unknown) {
+      this.isStarting = false;
+      this.isReady = false;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('interrupted') || msg.includes('AbortError')) {
+        console.warn('Handled benign play() interruption:', msg);
+        if (this.videoElement) return this.videoElement;
+      }
+      throw new Error('Camera access error: ' + msg);
     }
   }
 
@@ -68,7 +112,11 @@ export class CameraManager {
       this.mediaStream.getTracks().forEach((track) => track.stop());
       this.mediaStream = null;
     }
+    if (this.videoElement) {
+      this.videoElement.srcObject = null;
+    }
     this.isReady = false;
+    this.isStarting = false;
   }
 
   public getVideo(): HTMLVideoElement | null {
