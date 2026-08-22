@@ -1,15 +1,26 @@
 export class CameraManager {
   private videoElement: HTMLVideoElement | null = null;
   private mediaStream: MediaStream | null = null;
-  private isMirrored: boolean = true;
   private isReady: boolean = false;
 
   constructor() {
     this.videoElement = document.createElement('video');
-    this.videoElement.setAttribute('autoplay', '');
-    this.videoElement.setAttribute('muted', '');
-    this.videoElement.setAttribute('playsinline', '');
-    this.videoElement.style.display = 'none';
+    this.videoElement.setAttribute('autoplay', 'true');
+    this.videoElement.setAttribute('muted', 'true');
+    this.videoElement.setAttribute('playsinline', 'true');
+    this.videoElement.muted = true;
+    this.videoElement.autoplay = true;
+    this.videoElement.playsInline = true;
+    
+    // Position off-screen without display: none so GPU decodes texture
+    this.videoElement.style.position = 'fixed';
+    this.videoElement.style.top = '-9999px';
+    this.videoElement.style.left = '-9999px';
+    this.videoElement.style.width = '640px';
+    this.videoElement.style.height = '360px';
+    this.videoElement.style.opacity = '0';
+    this.videoElement.style.pointerEvents = 'none';
+    this.videoElement.style.zIndex = '-1';
     document.body.appendChild(this.videoElement);
   }
 
@@ -22,10 +33,9 @@ export class CameraManager {
       const constraints: MediaStreamConstraints = {
         audio: false,
         video: {
-          width: { ideal: targetWidth },
-          height: { ideal: targetHeight },
-          facingMode: 'user',
-          frameRate: { ideal: 60, min: 24 }
+          width: { ideal: targetWidth, min: 640 },
+          height: { ideal: targetHeight, min: 360 },
+          facingMode: 'user'
         }
       };
 
@@ -38,7 +48,6 @@ export class CameraManager {
       }
       throw new Error('Video element failed to initialize');
     } catch (err: unknown) {
-      // Fallback to basic constraints if high resolution failed
       try {
         this.mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         if (this.videoElement) {
@@ -67,7 +76,7 @@ export class CameraManager {
   }
 
   public getIsReady(): boolean {
-    return this.isReady && !!this.videoElement && this.videoElement.readyState >= 2;
+    return this.isReady && !!this.videoElement && this.videoElement.readyState >= 2 && this.videoElement.videoWidth > 0;
   }
 
   public getVideoDimensions(): { width: number; height: number; aspect: number } {

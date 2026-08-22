@@ -2,14 +2,13 @@ import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { lerp } from '../utils/mathUtils';
 
 export class EffectStateMachine {
-  private currentState: VisualEffectState = VisualEffectState.IDLE;
-  private targetState: VisualEffectState = VisualEffectState.IDLE;
-  private transitionAlpha: number = 1.0;
+  private currentState: VisualEffectState = VisualEffectState.RECTANGLE_TRACKING;
+  private targetState: VisualEffectState = VisualEffectState.RECTANGLE_TRACKING;
   private stateOpacities: Map<VisualEffectState, number> = new Map();
 
   constructor() {
     Object.values(VisualEffectState).forEach(s => this.stateOpacities.set(s, 0.0));
-    this.stateOpacities.set(VisualEffectState.IDLE, 1.0);
+    this.stateOpacities.set(VisualEffectState.RECTANGLE_TRACKING, 1.0);
   }
 
   public setState(state: VisualEffectState, instant: boolean = false): void {
@@ -17,13 +16,12 @@ export class EffectStateMachine {
     this.targetState = state;
     if (instant) {
       this.currentState = state;
-      this.transitionAlpha = 1.0;
       this.stateOpacities.forEach((_, s) => this.stateOpacities.set(s, s === state ? 1.0 : 0.0));
     }
   }
 
   public update(dt: number): void {
-    const blendSpeed = 4.0; // Blend rate per second
+    const blendSpeed = 4.0;
     
     Object.values(VisualEffectState).forEach(state => {
       const targetOpacity = state === this.targetState ? 1.0 : 0.0;

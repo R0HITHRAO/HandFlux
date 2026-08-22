@@ -10,23 +10,22 @@ export class TriangleWedgesMesh {
     this.group = new THREE.Group();
 
     const wedgeConfigs = [
-      { color: 0xb829ea, edgeColor: 0xff00ff, scale: [0.7, 1.4, 0.4] },
-      { color: 0x9333ea, edgeColor: 0xf43f5e, scale: [0.6, 1.2, 0.35] },
-      { color: 0xd946ef, edgeColor: 0x38bdf8, scale: [0.5, 1.0, 0.3] },
-      { color: 0x7e22ce, edgeColor: 0xa855f7, scale: [0.8, 1.5, 0.45] }
+      { color: 0xb829ea, emissive: 0x9333ea, edgeColor: 0xff00ff, scale: [0.8, 1.6, 0.45] },
+      { color: 0xa855f7, emissive: 0x7e22ce, edgeColor: 0x38bdf8, scale: [0.7, 1.4, 0.4] },
+      { color: 0xd946ef, emissive: 0xc026d3, edgeColor: 0xf43f5e, scale: [0.6, 1.2, 0.35] },
+      { color: 0x7e22ce, emissive: 0x6b21a8, edgeColor: 0xa855f7, scale: [0.9, 1.8, 0.5] }
     ];
 
     wedgeConfigs.forEach((cfg, idx) => {
       const geom = this.createPrismGeometry();
-      const mat = new THREE.MeshPhysicalMaterial({
+      const mat = new THREE.MeshStandardMaterial({
         color: cfg.color,
-        emissive: cfg.color,
-        emissiveIntensity: 0.3,
-        roughness: 0.15,
-        transmission: 0.7,
-        thickness: 0.5,
+        emissive: cfg.emissive,
+        emissiveIntensity: 0.65,
+        roughness: 0.2,
+        metalness: 0.1,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.85,
         side: THREE.DoubleSide
       });
 
@@ -44,7 +43,7 @@ export class TriangleWedgesMesh {
         wire,
         targetPos: new THREE.Vector3(0, 0, 0),
         currPos: new THREE.Vector3(0, 0, 0),
-        rotSpeed: 0.4 + idx * 0.2
+        rotSpeed: 0.5 + idx * 0.25
       });
     });
 
@@ -92,9 +91,9 @@ export class TriangleWedgesMesh {
     this.group.visible = true;
 
     this.wedges.forEach((w, idx) => {
-      let targetX = (idx % 2 === 0 ? -1.2 : 1.2) + Math.sin(time + idx) * 0.3;
-      let targetY = 0.5 + Math.cos(time * 0.8 + idx) * 0.4;
-      let targetZ = Math.sin(time * 1.5 + idx) * 0.2;
+      let targetX = (idx % 2 === 0 ? -1.3 : 1.3) + Math.sin(time * 0.9 + idx) * 0.4;
+      let targetY = 0.4 + Math.cos(time * 0.7 + idx) * 0.4;
+      let targetZ = Math.sin(time * 1.2 + idx) * 0.3;
 
       if (hands.length > 0) {
         const hand = hands[idx % hands.length];
@@ -109,17 +108,17 @@ export class TriangleWedgesMesh {
 
       w.targetPos.set(targetX, targetY, targetZ);
 
-      w.currPos.x = lerp(w.currPos.x, w.targetPos.x, 0.12);
-      w.currPos.y = lerp(w.currPos.y, w.targetPos.y, 0.12);
-      w.currPos.z = lerp(w.currPos.z, w.targetPos.z, 0.12);
+      w.currPos.x = lerp(w.currPos.x, w.targetPos.x, 0.15);
+      w.currPos.y = lerp(w.currPos.y, w.targetPos.y, 0.15);
+      w.currPos.z = lerp(w.currPos.z, w.targetPos.z, 0.15);
 
       w.mesh.position.copy(w.currPos);
       w.mesh.rotation.y = time * w.rotSpeed;
-      w.mesh.rotation.z = Math.sin(time + idx) * 0.25;
-      w.mesh.rotation.x = Math.cos(time * 0.5 + idx) * 0.2;
+      w.mesh.rotation.z = Math.sin(time + idx) * 0.3;
+      w.mesh.rotation.x = Math.cos(time * 0.5 + idx) * 0.25;
 
-      const mat = w.mesh.material as THREE.MeshPhysicalMaterial;
-      mat.opacity = opacity * 0.85;
+      const mat = w.mesh.material as THREE.MeshStandardMaterial;
+      mat.opacity = opacity * 0.9;
       const wireMat = w.wire.material as THREE.LineBasicMaterial;
       wireMat.opacity = opacity * 0.95;
     });

@@ -21,6 +21,7 @@ export class SceneManager {
   private bgQuad: THREE.Mesh;
   private bgMaterial: THREE.ShaderMaterial;
   private videoTexture: THREE.VideoTexture | THREE.CanvasTexture | null = null;
+  private videoElement: HTMLVideoElement | null = null;
 
   // 3D Visual Meshes
   public trackedPlane: TrackedPlaneMesh;
@@ -40,31 +41,32 @@ export class SceneManager {
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
 
-    // Setup Renderer
+    // 1. Setup Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setSize(this.width, this.height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.autoClear = false;
     this.container.appendChild(this.renderer.domElement);
 
-    // Setup 3D Perspective Scene
+    // 2. Setup 3D Perspective Scene
     this.scene3D = new THREE.Scene();
     this.camera3D = new THREE.PerspectiveCamera(60, this.width / this.height, 0.1, 100);
     this.camera3D.position.z = 5;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
     this.scene3D.add(ambientLight);
-    const dirLight1 = new THREE.DirectionalLight(0xff00ff, 2.0);
+    const dirLight1 = new THREE.DirectionalLight(0xff00ff, 3.0);
     dirLight1.position.set(5, 5, 5);
     this.scene3D.add(dirLight1);
-    const dirLight2 = new THREE.DirectionalLight(0x00ffff, 2.0);
+    const dirLight2 = new THREE.DirectionalLight(0x00ffff, 3.0);
     dirLight2.position.set(-5, -5, 5);
     this.scene3D.add(dirLight2);
 
-    // Setup Background Quad with Thermal & Blur Shader
+    // 3. Setup Background Quad with Orthographic Camera
     this.sceneBg = new THREE.Scene();
-    this.cameraBg = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.cameraBg = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
+    this.cameraBg.position.z = 1;
 
     // Dummy Canvas for synthetic fallback
     this.dummyCanvas = document.createElement('canvas');
@@ -103,11 +105,13 @@ export class SceneManager {
   }
 
   public setVideoSource(video: HTMLVideoElement | null): void {
+    this.videoElement = video;
     if (video) {
-      this.videoTexture = new THREE.VideoTexture(video);
-      this.videoTexture.minFilter = THREE.LinearFilter;
-      this.videoTexture.magFilter = THREE.LinearFilter;
-      this.bgMaterial.uniforms.tDiffuse.value = this.videoTexture;
+      const tex = new THREE.VideoTexture(video);
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      this.videoTexture = tex;
+      this.bgMaterial.uniforms.tDiffuse.value = tex;
       this.isSyntheticBg = false;
     } else {
       this.isSyntheticBg = true;
@@ -119,27 +123,25 @@ export class SceneManager {
     stateMachine: EffectStateMachine,
     time: number
   ): void {
-    // 1. Update Background Texture
-    if (this.isSyntheticBg || !this.videoTexture) {
+    const isVideoLive = !!this.videoElement && this.videoElement.readyState >= 2 && this.videoElement.videoWidth > 0;
+
+    if (!isVideoLive || this.isSyntheticBg || !this.videoTexture) {
       this.renderSyntheticBackground(time);
     } else if (this.videoTexture) {
       this.videoTexture.needsUpdate = true;
     }
 
-    // 2. Set Background Post-Process Shader Uniforms
     this.bgMaterial.uniforms.uThermalIntensity.value = stateMachine.getThermalIntensity();
     this.bgMaterial.uniforms.uBlurIntensity.value = stateMachine.getBlurIntensity();
     this.bgMaterial.uniforms.uTime.value = time;
 
-    // 3. Update 3D Geometry Layers with individual state opacities
     const rectHatchOpacity = stateMachine.getOpacity(VisualEffectState.RECTANGLE_TRACKING);
     const rectDotsOpacity = stateMachine.getOpacity(VisualEffectState.RECTANGLE_DOTS);
-    const wedgeOpacity = stateMachine.getOpacity(VisualEffectState.TRIANGLE_EFFECT) + stateMachine.getOpacity(VisualEffectState.ANGULAR_OBJECT) * 0.8;
+    const wedgeOpacity = Math.max(stateMachine.getOpacity(VisualEffectState.TRIANGLE_EFFECT), stateMachine.getOpacity(VisualEffectState.ANGULAR_OBJECT));
     const blocksOpacity = stateMachine.getOpacity(VisualEffectState.GLOW_BLOCKS);
     const largeOpacity = stateMachine.getOpacity(VisualEffectState.LARGE_GEOMETRY);
     const prismOpacity = stateMachine.getOpacity(VisualEffectState.PURPLE_PRISM);
 
-    // Tracked plane handles both hatching (mode 0) and pink dots (mode 1)
     if (rectDotsOpacity > 0.05) {
       this.trackedPlane.update(hands, this.width, this.height, time, 1, rectDotsOpacity);
     } else {
@@ -151,7 +153,6 @@ export class SceneManager {
     this.largeStructure.update(hands, this.width, this.height, time, largeOpacity);
     this.purplePrism.update(hands, this.width, this.height, time, prismOpacity);
 
-    // 4. Render Passes
     this.renderer.clear();
     this.renderer.render(this.sceneBg, this.cameraBg);
     this.renderer.clearDepth();
@@ -163,29 +164,39 @@ export class SceneManager {
     const w = this.dummyCanvas.width;
     const h = this.dummyCanvas.height;
 
-    // Simulated indoor room lighting & subtle ambient camera noise
-    const grad = ctx.createRadialGradient(w * 0.5, h * 0.4, 40, w * 0.5, h * 0.5, w * 0.7);
-    grad.addColorStop(0, '#2d2d3a');
-    grad.addColorStop(0.5, '#1e1e28');
-    grad.addColorStop(1, '#0e0e14');
+    // Room studio gradient
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, '#151522');
+    grad.addColorStop(0.5, '#201c30');
+    grad.addColorStop(1, '#0e0e18');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    // Shelf / wall lines in background
+    // Studio grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, h * 0.35); ctx.lineTo(w, h * 0.35);
-    ctx.moveTo(0, h * 0.65); ctx.lineTo(w, h * 0.65);
-    ctx.stroke();
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
 
-    // Silhouetted user torso in center
-    ctx.fillStyle = 'rgba(25, 25, 35, 0.9)';
+    // Ambient room horizon
+    const radial = ctx.createRadialGradient(w * 0.5, h * 0.45, 20, w * 0.5, h * 0.45, w * 0.5);
+    radial.addColorStop(0, 'rgba(168, 85, 247, 0.3)');
+    radial.addColorStop(0.7, 'rgba(6, 182, 212, 0.12)');
+    radial.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = radial;
+    ctx.fillRect(0, 0, w, h);
+
+    // Center silhouette
+    ctx.fillStyle = 'rgba(32, 32, 50, 0.95)';
     ctx.beginPath();
-    ctx.ellipse(w * 0.5, h * 0.85, w * 0.22, h * 0.35, 0, 0, Math.PI * 2);
+    ctx.ellipse(w * 0.5, h * 0.88, w * 0.24, h * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(w * 0.5, h * 0.45, w * 0.09, h * 0.15, 0, 0, Math.PI * 2);
+    ctx.ellipse(w * 0.5, h * 0.46, w * 0.095, h * 0.16, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (!this.videoTexture || !(this.videoTexture instanceof THREE.CanvasTexture)) {
