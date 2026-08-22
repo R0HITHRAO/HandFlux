@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SceneManager } from '../rendering/SceneManager';
 import { TechnicalHUDCanvas, HUDOptions } from '../overlays/TechnicalHUDCanvas';
 import { HandLandmarkerService } from '../vision/HandLandmarkerService';
@@ -11,6 +11,7 @@ import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
 import { VisualEffectState } from '../types/effects';
 import { PerformanceMetrics } from '../types/performance';
 import { GestureMetrics } from '../types/gestures';
+import { HandLandmarks } from '../types/vision';
 import { ControlBar } from './ControlBar';
 import { DebugHUD } from './DebugHUD';
 import { ErrorModal } from './ErrorModal';
@@ -93,15 +94,12 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   useEffect(() => {
     if (!containerRef.current || !hudCanvasRef.current) return;
 
-    // 1. Initialize Three.js Scene
     const scene = new SceneManager(containerRef.current);
     sceneManagerRef.current = scene;
 
-    // 2. Initialize 2D HUD Canvas
     const hud = new TechnicalHUDCanvas(hudCanvasRef.current);
     hudRef.current = hud;
 
-    // Resize canvas
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -114,7 +112,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // 3. Start Camera & Vision
     let isCancelled = false;
     const initVision = async () => {
       await visionServiceRef.current.initialize();
@@ -172,8 +169,8 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         setCurrentState(stateMachineRef.current.getCurrentState());
       }
 
-      // 2. Track Hands (Real MediaPipe or Simulated)
-      let hands = [];
+      // 2. Track Hands
+      let hands: HandLandmarks[] = [];
       const visionStart = performance.now();
 
       if (isSimulated) {
@@ -183,7 +180,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         if (video && cameraManagerRef.current.getIsReady()) {
           hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
         }
-        // Fallback to simulated if real detection produced 0 hands in test mode
         if (hands.length === 0 && isSimulated) {
           hands = simTrackerRef.current.getSimulatedHands(width, height);
         }
@@ -243,7 +239,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     setIsSimulated(prev => {
       const next = !prev;
       if (!next) {
-        // Attempt webcam restart
         cameraManagerRef.current.startCamera().then(video => {
           sceneManagerRef.current?.setVideoSource(video);
         }).catch(err => {
@@ -260,7 +255,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
   const handleCapture = useCallback(() => {
     if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current);
+      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-capture.png');
     }
   }, []);
 
@@ -283,7 +278,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     }
   }, []);
 
-  // Keyboard Shortcuts Registration
   useEffect(() => {
     return registerKeyboardShortcuts({
       onSetState: handleSelectState,
@@ -327,7 +321,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         />
       )}
 
-      {/* Bottom Technical Control Bar */}
+      {/* Bottom Control Bar */}
       <ControlBar
         currentState={currentState}
         isDemo={isDemo}
@@ -347,7 +341,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         onReset={() => handleSelectState(VisualEffectState.RECTANGLE_TRACKING)}
       />
 
-      {/* Error Fallback Modal */}
+      {/* Error Modal */}
       {errorMessage && (
         <ErrorModal
           message={errorMessage}

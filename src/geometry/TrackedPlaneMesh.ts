@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { HalftoneShader } from '../shaders/halftoneShader';
 import { HandLandmarks } from '../types/vision';
 import { screenToThreeWorld } from '../utils/mathUtils';

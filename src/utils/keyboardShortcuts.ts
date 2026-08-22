@@ -1,4 +1,4 @@
-﻿import { VisualEffectState } from '../types/effects';
+import { VisualEffectState } from '../types/effects';
 
 export interface ShortcutHandlers {
   onSetState: (state: VisualEffectState) => void;

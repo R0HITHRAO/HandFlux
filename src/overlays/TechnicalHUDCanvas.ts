@@ -1,4 +1,4 @@
-﻿import { HandLandmarks } from '../types/vision';
+import { HandLandmarks } from '../types/vision';
 import { GestureMetrics } from '../types/gestures';
 import { VisualEffectState } from '../types/effects';
 

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { EffectStateMachine } from '../state/EffectStateMachine';
 import { VisualEffectState } from '../types/effects';
 

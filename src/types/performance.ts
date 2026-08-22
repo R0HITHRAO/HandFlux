@@ -1,4 +1,4 @@
-﻿export type QualityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' | 'AUTO';
+export type QualityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' | 'AUTO';
 
 export interface PerformanceMetrics {
   renderFps: number;

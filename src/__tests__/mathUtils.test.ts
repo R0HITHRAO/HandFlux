@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { distance2D, lerp, clamp, angleBetween, midpoint2D, normalizeScreenCoords, screenToThreeWorld } from '../utils/mathUtils';
 
 describe('mathUtils', () => {

@@ -1,4 +1,4 @@
-﻿export class CameraManager {
+export class CameraManager {
   private videoElement: HTMLVideoElement | null = null;
   private mediaStream: MediaStream | null = null;
   private isMirrored: boolean = true;

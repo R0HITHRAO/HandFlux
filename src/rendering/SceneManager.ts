@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { ThermalShader } from '../shaders/thermalShader';
 import { TrackedPlaneMesh } from '../geometry/TrackedPlaneMesh';
 import { TriangleWedgesMesh } from '../geometry/TriangleWedgesMesh';

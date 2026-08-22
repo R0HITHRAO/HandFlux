@@ -1,4 +1,4 @@
-﻿export function captureCanvasScreenshot(threeCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement, filename: string = 'hand-fx-capture.png'): void {
+export function captureCanvasScreenshot(threeCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement, filename: string = 'hand-fx-capture.png'): void {
   const compositeCanvas = document.createElement('canvas');
   compositeCanvas.width = threeCanvas.width;
   compositeCanvas.height = threeCanvas.height;

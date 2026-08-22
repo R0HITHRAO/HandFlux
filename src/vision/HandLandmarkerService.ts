@@ -1,4 +1,4 @@
-﻿import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { HandLandmarks, Landmark2D } from '../types/vision';
 import { LandmarkFilterSet } from './OneEuroFilter';
 

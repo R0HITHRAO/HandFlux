@@ -1,4 +1,4 @@
-﻿import { VisualEffectState } from '../types/effects';
+import { VisualEffectState } from '../types/effects';
 import { EffectStateMachine } from './EffectStateMachine';
 
 export interface TimelineEntry {

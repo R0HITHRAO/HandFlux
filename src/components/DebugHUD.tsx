@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { PerformanceMetrics } from '../types/performance';
 import { VisualEffectState } from '../types/effects';
 import { GestureMetrics } from '../types/gestures';

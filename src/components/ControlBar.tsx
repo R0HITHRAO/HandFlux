@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { Camera, Video, Circle, Maximize, Play, Pause, RefreshCw, Eye, Sparkles } from 'lucide-react';
 

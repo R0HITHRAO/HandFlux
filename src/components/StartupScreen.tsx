@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Camera, Sparkles, Cpu, Play, Video, MonitorPlay } from 'lucide-react';
 
 interface StartupScreenProps {

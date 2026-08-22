@@ -1,4 +1,4 @@
-﻿export type HandGestureType = 
+export type HandGestureType = 
   | 'UNKNOWN'
   | 'OPEN_PALM'
   | 'POINTING'

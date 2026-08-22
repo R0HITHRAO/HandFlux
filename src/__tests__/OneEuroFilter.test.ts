@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { OneEuroFilter, LandmarkFilterSet } from '../vision/OneEuroFilter';
 
 describe('OneEuroFilter', () => {

@@ -1,4 +1,4 @@
-﻿# HandFlux | Real-Time Hand-Controlled Visual Effects
+ HandFlux | Real-Time Hand-Controlled Visual Effects
 
 > A browser-first real-time computer-vision visual effects installation driven by hand/finger tracking, procedural 3D geometry, custom GLSL shaders, and technical coordinate overlays.
 

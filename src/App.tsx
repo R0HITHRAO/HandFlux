@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { StartupScreen } from './components/StartupScreen';
 import { MainView } from './components/MainView';
 import { AppMode } from './types/effects';

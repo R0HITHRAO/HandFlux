@@ -1,6 +1,6 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { HandLandmarks } from '../types/vision';
-import { screenToThreeWorld, lerp, distance2D, angleBetween } from '../utils/mathUtils';
+import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 
 export class LargeStructureMesh {
   public group: THREE.Group;
@@ -12,15 +12,13 @@ export class LargeStructureMesh {
   constructor() {
     this.group = new THREE.Group();
 
-    // Multi-faceted geometric planes and extruded prisms in vibrant color palette
-    // (purple, violet, blue, cyan, green, yellow, orange, magenta)
     const segmentConfigs = [
-      { color: 0x9333ea, edgeColor: 0xd8b4fe, size: [1.2, 0.7, 0.4], pos: [-1.2, 0.2, 0.1] },  // Violet
-      { color: 0x00d2ff, edgeColor: 0x7dd3fc, size: [1.4, 0.6, 0.3], pos: [-0.4, -0.1, 0.2] }, // Cyan
-      { color: 0x10b981, edgeColor: 0x6ee7b7, size: [1.1, 0.8, 0.35], pos: [0.3, 0.25, -0.1] }, // Green
-      { color: 0xfacc15, edgeColor: 0xfef08a, size: [1.3, 0.5, 0.4], pos: [1.1, -0.2, 0.15] }, // Yellow
-      { color: 0xf97316, edgeColor: 0xfed7aa, size: [0.9, 0.7, 0.3], pos: [1.8, 0.1, -0.1] },  // Orange
-      { color: 0xec4899, edgeColor: 0xfbcfe8, size: [1.5, 0.65, 0.45], pos: [0.0, 0.0, 0.3] }  // Magenta
+      { color: 0x9333ea, edgeColor: 0xd8b4fe, size: [1.2, 0.7, 0.4], pos: [-1.2, 0.2, 0.1] },
+      { color: 0x00d2ff, edgeColor: 0x7dd3fc, size: [1.4, 0.6, 0.3], pos: [-0.4, -0.1, 0.2] },
+      { color: 0x10b981, edgeColor: 0x6ee7b7, size: [1.1, 0.8, 0.35], pos: [0.3, 0.25, -0.1] },
+      { color: 0xfacc15, edgeColor: 0xfef08a, size: [1.3, 0.5, 0.4], pos: [1.1, -0.2, 0.15] },
+      { color: 0xf97316, edgeColor: 0xfed7aa, size: [0.9, 0.7, 0.3], pos: [1.8, 0.1, -0.1] },
+      { color: 0xec4899, edgeColor: 0xfbcfe8, size: [1.5, 0.65, 0.45], pos: [0.0, 0.0, 0.3] }
     ];
 
     segmentConfigs.forEach((cfg) => {
@@ -81,14 +79,9 @@ export class LargeStructureMesh {
       const lWorld = screenToThreeWorld(leftHand.palmCenter.screenX, leftHand.palmCenter.screenY, screenWidth, screenHeight);
       const rWorld = screenToThreeWorld(rightHand.palmCenter.screenX, rightHand.palmCenter.screenY, screenWidth, screenHeight);
 
-      // Midpoint between hands
       targetCenter.set((lWorld.x + rWorld.x) * 0.5, (lWorld.y + rWorld.y) * 0.5, 0);
-      
-      // Distance between hands controls width / scale
       const dist = Math.sqrt((rWorld.x - lWorld.x) ** 2 + (rWorld.y - lWorld.y) ** 2);
       targetWidth = Math.max(2.0, dist * 1.3);
-
-      // Relative angle between hands controls structure bank/rotation
       targetRotation = Math.atan2(rWorld.y - lWorld.y, rWorld.x - lWorld.x);
     } else if (hands.length === 1) {
       const h = hands[0];
@@ -106,7 +99,6 @@ export class LargeStructureMesh {
     this.group.rotation.y = Math.sin(time * 0.8) * 0.2;
     this.group.rotation.x = Math.cos(time * 0.6) * 0.15;
 
-    // Scale segments based on current width
     const stretchFactor = this.currentWidth / 3.5;
     this.segments.forEach((seg, i) => {
       seg.mesh.scale.x = stretchFactor;
@@ -114,7 +106,8 @@ export class LargeStructureMesh {
 
       const mat = seg.mesh.material as THREE.MeshPhysicalMaterial;
       mat.opacity = opacity * 0.85;
-      seg.wire.material.opacity = opacity * 0.95;
+      const wireMat = seg.wire.material as THREE.LineBasicMaterial;
+      wireMat.opacity = opacity * 0.95;
     });
   }
 }

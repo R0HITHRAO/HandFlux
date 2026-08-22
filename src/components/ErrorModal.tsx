@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { AlertTriangle, Play } from 'lucide-react';
 
 interface ErrorModalProps {

@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { HandLandmarks } from '../types/vision';
 import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 
@@ -9,7 +9,6 @@ export class TriangleWedgesMesh {
   constructor() {
     this.group = new THREE.Group();
 
-    // Create 3-4 elongated triangular wedge prisms
     const wedgeConfigs = [
       { color: 0xb829ea, edgeColor: 0xff00ff, scale: [0.7, 1.4, 0.4] },
       { color: 0x9333ea, edgeColor: 0xf43f5e, scale: [0.6, 1.2, 0.35] },
@@ -18,7 +17,6 @@ export class TriangleWedgesMesh {
     ];
 
     wedgeConfigs.forEach((cfg, idx) => {
-      // Build 3D triangular prism geometry
       const geom = this.createPrismGeometry();
       const mat = new THREE.MeshPhysicalMaterial({
         color: cfg.color,
@@ -55,7 +53,6 @@ export class TriangleWedgesMesh {
 
   private createPrismGeometry(): THREE.BufferGeometry {
     const geom = new THREE.BufferGeometry();
-    // 3-sided prism: 6 vertices
     const vertices = new Float32Array([
       // Front triangle
        0.0,  0.6,  0.3,
@@ -68,15 +65,10 @@ export class TriangleWedgesMesh {
     ]);
 
     const indices = [
-      // Front
       0, 1, 2,
-      // Back
       3, 5, 4,
-      // Left side
       0, 3, 4,  0, 4, 1,
-      // Right side
       0, 2, 5,  0, 5, 3,
-      // Bottom
       1, 4, 5,  1, 5, 2
     ];
 
@@ -99,7 +91,6 @@ export class TriangleWedgesMesh {
     }
     this.group.visible = true;
 
-    // Anchor wedges to raised fingertips and hand anchors with subtle lag
     this.wedges.forEach((w, idx) => {
       let targetX = (idx % 2 === 0 ? -1.2 : 1.2) + Math.sin(time + idx) * 0.3;
       let targetY = 0.5 + Math.cos(time * 0.8 + idx) * 0.4;
@@ -110,7 +101,6 @@ export class TriangleWedgesMesh {
         const tip = (idx === 0) ? hand.indexTip : (idx === 1) ? hand.thumbTip : (idx === 2) ? hand.pinkyTip : hand.palmCenter;
         const world = screenToThreeWorld(tip.screenX, tip.screenY, screenWidth, screenHeight);
         
-        // Offset slightly above fingertips
         const angleOffset = (idx - 1.5) * 0.6;
         targetX = world.x + Math.sin(angleOffset) * 0.6;
         targetY = world.y + 0.4 + Math.cos(angleOffset) * 0.3;
@@ -119,7 +109,6 @@ export class TriangleWedgesMesh {
 
       w.targetPos.set(targetX, targetY, targetZ);
 
-      // Inertia interpolation
       w.currPos.x = lerp(w.currPos.x, w.targetPos.x, 0.12);
       w.currPos.y = lerp(w.currPos.y, w.targetPos.y, 0.12);
       w.currPos.z = lerp(w.currPos.z, w.targetPos.z, 0.12);
@@ -129,10 +118,10 @@ export class TriangleWedgesMesh {
       w.mesh.rotation.z = Math.sin(time + idx) * 0.25;
       w.mesh.rotation.x = Math.cos(time * 0.5 + idx) * 0.2;
 
-      // Update material opacity
       const mat = w.mesh.material as THREE.MeshPhysicalMaterial;
       mat.opacity = opacity * 0.85;
-      w.wire.material.opacity = opacity * 0.95;
+      const wireMat = w.wire.material as THREE.LineBasicMaterial;
+      wireMat.opacity = opacity * 0.95;
     });
   }
 }

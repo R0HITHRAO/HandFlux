@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { HandLandmarks } from '../types/vision';
 import { screenToThreeWorld, lerp } from '../utils/mathUtils';
 

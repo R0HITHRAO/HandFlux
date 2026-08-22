@@ -1,4 +1,4 @@
-﻿import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
+import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { lerp } from '../utils/mathUtils';
 
 export class EffectStateMachine {

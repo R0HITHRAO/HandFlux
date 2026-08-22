@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GestureEngine } from '../vision/GestureEngine';
 import { SimulatedHandTracker } from '../vision/SimulatedHandTracker';
 

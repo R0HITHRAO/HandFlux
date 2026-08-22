@@ -1,4 +1,4 @@
-﻿import { PerformanceMetrics, QualityLevel } from '../types/performance';
+import { PerformanceMetrics, QualityLevel } from '../types/performance';
 
 export class PerformanceMonitor {
   private frameCount: number = 0;

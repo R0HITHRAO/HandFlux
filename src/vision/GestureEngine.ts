@@ -1,4 +1,4 @@
-﻿import { HandLandmarks } from '../types/vision';
+import { HandLandmarks } from '../types/vision';
 import { GestureMetrics, HandGestureType } from '../types/gestures';
 import { distance2D, angleBetween } from '../utils/mathUtils';
 

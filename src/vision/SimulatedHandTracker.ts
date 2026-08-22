@@ -1,4 +1,4 @@
-﻿import { HandLandmarks, Landmark2D } from '../types/vision';
+import { HandLandmarks, Landmark2D } from '../types/vision';
 
 export class SimulatedHandTracker {
   private startTime: number = performance.now();

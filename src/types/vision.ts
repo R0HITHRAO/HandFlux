@@ -1,4 +1,4 @@
-﻿export interface Landmark2D {
+export interface Landmark2D {
   x: number; // 0 to 1 (normalized, mirrored)
   y: number; // 0 to 1 (normalized)
   z?: number;

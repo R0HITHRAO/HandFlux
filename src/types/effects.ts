@@ -1,4 +1,4 @@
-﻿export enum VisualEffectState {
+export enum VisualEffectState {
   IDLE = 'IDLE',
   RECTANGLE_TRACKING = 'RECTANGLE_TRACKING', // 0-4s (Blue/purple hatching)
   TRIANGLE_EFFECT = 'TRIANGLE_EFFECT',       // 5-8s (Purple/pink wedges)
