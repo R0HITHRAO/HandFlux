@@ -14,7 +14,6 @@ export class SceneManager {
   private scene3D: THREE.Scene;
   private camera3D: THREE.PerspectiveCamera;
 
-  // 3D Visual Meshes
   public trackedPlane: TrackedPlaneMesh;
   public triangleWedges: TriangleWedgesMesh;
   public glowingBlocks: GlowingBlocksMesh;
@@ -29,24 +28,31 @@ export class SceneManager {
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
 
-    // 1. Transparent WebGL Renderer (NEVER PAINT BLACK)
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setSize(this.width, this.height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0x000000, 0); // 100% transparent clear color
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.autoClear = true;
+
+    this.renderer.domElement.style.position = 'absolute';
+    this.renderer.domElement.style.top = '0';
+    this.renderer.domElement.style.left = '0';
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.pointerEvents = 'none';
+
     this.container.appendChild(this.renderer.domElement);
 
-    // 2. 3D Perspective Scene
     this.scene3D = new THREE.Scene();
-    this.scene3D.background = null; // NEVER use opaque scene background!
+    this.scene3D.background = null;
 
     this.camera3D = new THREE.PerspectiveCamera(60, this.width / this.height, 0.1, 100);
-    this.camera3D.position.z = 5;
+    this.camera3D.position.set(0, 0, 5);
+    this.camera3D.lookAt(0, 0, 0);
 
-    // Vibrant Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
     this.scene3D.add(ambientLight);
-    
+
     const magentaLight = new THREE.DirectionalLight(0xff00ff, 4.0);
     magentaLight.position.set(5, 5, 5);
     this.scene3D.add(magentaLight);
@@ -59,7 +65,6 @@ export class SceneManager {
     goldLight.position.set(0, 5, -2);
     this.scene3D.add(goldLight);
 
-    // 3. Initialize All 3D Visual Geometries
     this.trackedPlane = new TrackedPlaneMesh();
     this.scene3D.add(this.trackedPlane.group);
 
@@ -82,12 +87,10 @@ export class SceneManager {
     time: number
   ): void {
     if (effectManager.isRawCamera()) {
-      // In RAW CAMERA mode, hide all AR geometry
       this.renderer.clear();
       return;
     }
 
-    // Retrieve live opacities from EffectManager
     const rectHatchOpacity = effectManager.getOpacity(VisualEffectState.RECTANGLE_TRACKING);
     const rectDotsOpacity = effectManager.getOpacity(VisualEffectState.RECTANGLE_DOTS);
     const wedgeOpacity = Math.max(
@@ -98,7 +101,6 @@ export class SceneManager {
     const largeOpacity = effectManager.getOpacity(VisualEffectState.LARGE_GEOMETRY);
     const prismOpacity = effectManager.getOpacity(VisualEffectState.PURPLE_PRISM);
 
-    // Update 3D Geometries
     if (rectDotsOpacity > 0.05) {
       this.trackedPlane.update(hands, this.width, this.height, time, 1, rectDotsOpacity);
     } else {
@@ -110,7 +112,6 @@ export class SceneManager {
     this.largeStructure.update(hands, this.width, this.height, time, largeOpacity);
     this.purplePrism.update(hands, this.width, this.height, time, prismOpacity);
 
-    // Render transparent 3D AR layer
     this.renderer.render(this.scene3D, this.camera3D);
   }
 
