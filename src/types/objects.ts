@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VisualEffectState } from './effects';
 
-export type ObjectLifecycleState = 'SPAWNING' | 'UNSELECTED' | 'GRABBED' | 'DESTROYED';
+export type ObjectLifecycleState = 'SPAWNING' | 'IDLE' | 'GRABBED' | 'DESTROYED';
 
 export interface ARObjectInstance {
   id: string;

@@ -3,10 +3,18 @@ import { GestureMetrics, HandGestureType } from '../types/gestures';
 import { distance2D, angleBetween } from '../utils/mathUtils';
 
 export class GestureEngine {
-  private prevPositions: Map<string, { x: number; y: number; time: number }> = new Map();
+  private candidateGesture: HandGestureType = 'UNKNOWN';
+  private candidateDuration: number = 0;
+  private confirmedGesture: HandGestureType = 'UNKNOWN';
+  private lastProcessTime: number = performance.now();
 
   public processHands(hands: HandLandmarks[], screenWidth: number, screenHeight: number): GestureMetrics {
+    const now = performance.now();
+    const dt = Math.max(0.001, (now - this.lastProcessTime) / 1000);
+    this.lastProcessTime = now;
+
     if (hands.length === 0) {
+      this.confirmedGesture = 'UNKNOWN';
       return {
         primaryGesture: 'UNKNOWN',
         pinchDistance: 1,
@@ -21,8 +29,19 @@ export class GestureEngine {
 
     const hand1 = hands[0];
     const pinchDist = distance2D(hand1.thumbTip, hand1.indexTip);
-    const isPinching = pinchDist < 0.07;
-    const hand1Gesture = this.classifySingleHand(hand1, pinchDist);
+    const isPinching = pinchDist < 0.075;
+    const rawGesture = this.classifySingleHand(hand1, pinchDist);
+
+    // Temporal Gesture Filtering: Require stability for 80ms before switching
+    if (rawGesture === this.candidateGesture) {
+      this.candidateDuration += dt;
+      if (this.candidateDuration >= 0.08) {
+        this.confirmedGesture = rawGesture;
+      }
+    } else {
+      this.candidateGesture = rawGesture;
+      this.candidateDuration = 0;
+    }
 
     let twoHandDistance = 0;
     let twoHandAngle = 0;
@@ -51,7 +70,7 @@ export class GestureEngine {
     const spread = distance2D(hand1.thumbTip, hand1.pinkyTip);
 
     return {
-      primaryGesture: hand1Gesture,
+      primaryGesture: this.confirmedGesture,
       secondaryGesture,
       pinchDistance: pinchDist,
       isPinching,
@@ -64,7 +83,7 @@ export class GestureEngine {
   }
 
   private classifySingleHand(hand: HandLandmarks, pinchDist: number): HandGestureType {
-    if (pinchDist < 0.07) return 'PINCH';
+    if (pinchDist < 0.075) return 'PINCH';
 
     const indexExtended = hand.indexTip.y < hand.landmarks[6].y;
     const middleExtended = hand.middleTip.y < hand.landmarks[10].y;
@@ -74,19 +93,15 @@ export class GestureEngine {
     if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
       return 'POINTING';
     }
-
     if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
       return 'PEACE';
     }
-
     if (!indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
       return 'FIST';
     }
-
     if (indexExtended && middleExtended && ringExtended && pinkyExtended) {
       return 'OPEN_PALM';
     }
-
     return 'UNKNOWN';
   }
 }

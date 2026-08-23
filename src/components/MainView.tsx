@@ -6,8 +6,6 @@ import { GestureEngine } from '../vision/GestureEngine';
 import { CameraManager } from '../camera/CameraManager';
 import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
 import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
-import { PerformanceMetrics } from '../types/performance';
-import { GestureMetrics } from '../types/gestures';
 import { HandLandmarks } from '../types/vision';
 import { ControlBar } from './ControlBar';
 import { captureCanvasScreenshot } from '../utils/recording';
@@ -31,34 +29,21 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
-  // States
-  const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.PURPLE_PRISM);
-  const [isThermalActive, setIsThermalActive] = useState<boolean>(false);
+  // Milestone 1 Requirement: Initial state CURRENT TOOL = NONE, OBJECTS = 0
+  const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
   const [showDebug, setShowDebug] = useState(true);
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
-  const [perfMetrics, setPerfMetrics] = useState<PerformanceMetrics>({
+  // Low-frequency UI Debug State (5 Hz)
+  const [debugStats, setDebugStats] = useState({
     renderFps: 60,
     visionFps: 30,
-    visionLatencyMs: 12,
-    frameTimeMs: 16.6,
-    qualityLevel: 'AUTO',
-    activeParticles: 350,
-    glslPasses: 3
-  });
-
-  const [gestureMetrics, setGestureMetrics] = useState<GestureMetrics>({
-    primaryGesture: 'UNKNOWN',
-    pinchDistance: 1,
-    isPinching: false,
-    twoHandDistance: 0,
-    twoHandAngle: 0,
-    twoHandMidpoint: { x: 0.5, y: 0.5, screenX: 0, screenY: 0 },
-    spread: 0,
-    overallVelocity: 0
+    handsCount: 0,
+    gesture: 'OPEN_PALM',
+    selectedId: 'NONE'
   });
 
   const hudOptionsRef = useRef<HUDOptions>({
@@ -69,7 +54,7 @@ export const MainView: React.FC<MainViewProps> = () => {
     showBoundingBox: true
   });
 
-  // 1. Initialize Scene & Transparent WebGL
+  // 1. Initial WebGL & Camera Setup
   useEffect(() => {
     if (!arContainerRef.current || !hudCanvasRef.current || !videoRef.current) return;
 
@@ -116,22 +101,23 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 2. Explicit User Creation Handler (Button / Spacebar)
+  // 2. Discrete Event Handlers (Never inside render loop)
   const handleCreateObject = useCallback(() => {
     if (!sceneManagerRef.current) return;
     const hands = latestHandsRef.current;
     if (hands.length === 0) return;
 
     const newObj = sceneManagerRef.current.arobjectManager.createObjectAtHand(
-      activeTool,
+      VisualEffectState.PURPLE_PRISM,
       hands[0],
       window.innerWidth,
       window.innerHeight
     );
     if (newObj) {
+      setActiveTool(VisualEffectState.PURPLE_PRISM);
       setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
     }
-  }, [activeTool]);
+  }, []);
 
   const handleDeleteSelected = useCallback(() => {
     if (!sceneManagerRef.current) return;
@@ -145,33 +131,34 @@ export const MainView: React.FC<MainViewProps> = () => {
     setObjectCount(0);
   }, []);
 
-  const handleToggleThermal = useCallback(() => {
-    setIsThermalActive(prev => !prev);
-  }, []);
-
-  // 3. Vision Loop (~30 FPS)
+  // 3. Vision Loop (Throttled to 25-30 FPS, Async)
   useEffect(() => {
     let visionTimer: ReturnType<typeof setTimeout>;
     let isRunning = true;
 
     const runVisionStep = () => {
       if (!isRunning) return;
+      if (document.hidden) {
+        visionTimer = setTimeout(runVisionStep, 200);
+        return;
+      }
+
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const timestamp = performance.now();
+      const tStart = performance.now();
 
       let hands: HandLandmarks[] = [];
       const video = videoRef.current;
 
       if (video && cameraManagerRef.current.getIsReady()) {
-        hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
+        hands = visionServiceRef.current.detectHands(video, tStart, width, height);
       }
 
+      const tEnd = performance.now();
+      perfMonitorRef.current.recordVisionInference(tEnd - tStart, tEnd);
       latestHandsRef.current = hands;
-      const gestures = gestureEngineRef.current.processHands(hands, width, height);
-      setGestureMetrics(gestures);
 
-      visionTimer = setTimeout(runVisionStep, 28);
+      visionTimer = setTimeout(runVisionStep, 32);
     };
 
     runVisionStep();
@@ -181,16 +168,35 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 4. Smooth 60 FPS Render Loop
+  // 4. Low-Frequency UI Statistics Poller (5 Hz)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const m = perfMonitorRef.current.getMetrics();
+      const hands = latestHandsRef.current;
+      const gestures = gestureEngineRef.current.processHands(hands, window.innerWidth, window.innerHeight);
+      const selected = sceneManagerRef.current?.arobjectManager.getSelectedObject();
+
+      setDebugStats({
+        renderFps: m.renderFps,
+        visionFps: m.visionFps,
+        handsCount: hands.length,
+        gesture: gestures.primaryGesture,
+        selectedId: selected ? (selected.state === 'GRABBED' ? 'PRISM [GRABBED]' : 'PRISM [SELECTED]') : 'NONE'
+      });
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 5. 60 FPS Render Loop (Zero Allocations)
   useEffect(() => {
     let animId: number;
     let lastTime = performance.now();
-    let currThermal = 0.0;
 
     const loop = (timestamp: number) => {
       animId = requestAnimationFrame(loop);
+      perfMonitorRef.current.recordRenderFrame(timestamp);
 
-      const dt = Math.max(0.001, Math.min(0.1, (timestamp - lastTime) / 1000.0));
+      const dt = Math.max(0.001, Math.min(0.08, (timestamp - lastTime) / 1000.0));
       lastTime = timestamp;
 
       const width = window.innerWidth;
@@ -198,31 +204,18 @@ export const MainView: React.FC<MainViewProps> = () => {
       const hands = latestHandsRef.current;
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
 
-      // Thermal Transition Easing
-      const targetThermal = isThermalActive ? 1.0 : 0.0;
-      currThermal += (targetThermal - currThermal) * Math.min(1.0, dt * 5.0);
-      if (videoRef.current) {
-        if (currThermal > 0.02) {
-          const inv = (currThermal * 100).toFixed(0);
-          const rot = (currThermal * 180).toFixed(0);
-          const sat = (100 + currThermal * 300).toFixed(0);
-          const con = (100 + currThermal * 80).toFixed(0);
-          videoRef.current.style.filter = 'invert(' + inv + '%) hue-rotate(' + rot + 'deg) saturate(' + sat + '%) contrast(' + con + '%)';
-        } else {
-          videoRef.current.style.filter = 'none';
-        }
-      }
-
-      // Update 3D Perspective Scene & Handle Pinch Timer
+      // Update 3D Perspective Scene & Interaction State
       let pinchHoldProgress = 0.0;
       if (sceneManagerRef.current) {
         sceneManagerRef.current.arobjectManager.setActiveTool(activeTool);
+        const renderScale = perfMonitorRef.current.getRenderScale();
         const res = sceneManagerRef.current.updateAndRender(
           hands,
           gestures,
           activeTool,
           dt,
-          timestamp / 1000.0
+          timestamp / 1000.0,
+          renderScale
         );
         pinchHoldProgress = res.pinchHoldProgress;
         if (res.creationTriggered) {
@@ -234,6 +227,7 @@ export const MainView: React.FC<MainViewProps> = () => {
       if (hudRef.current && showHUD && sceneManagerRef.current) {
         const objects = sceneManagerRef.current.arobjectManager.getObjects();
         const selected = sceneManagerRef.current.arobjectManager.getSelectedObject();
+        const metrics = perfMonitorRef.current.getMetrics();
         hudRef.current.render(
           hands,
           gestures,
@@ -242,32 +236,26 @@ export const MainView: React.FC<MainViewProps> = () => {
           selected ? selected.id : null,
           pinchHoldProgress,
           hudOptionsRef.current,
-          perfMetrics.renderFps,
+          metrics.renderFps,
+          metrics.visionFps,
           timestamp / 1000.0
         );
       } else if (hudRef.current && !showHUD) {
         const ctx = hudCanvasRef.current?.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, width, height);
       }
-
-      const metrics = perfMonitorRef.current.update(0);
-      setPerfMetrics(metrics);
     };
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [showHUD, isThermalActive, activeTool, perfMetrics.renderFps]);
+  }, [showHUD, activeTool]);
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '1') setActiveTool(VisualEffectState.RECTANGLE_TRACKING);
-      if (e.key === '2') setActiveTool(VisualEffectState.TRIANGLE_EFFECT);
-      if (e.key === '3') setActiveTool(VisualEffectState.GLOW_BLOCKS);
-      if (e.key === '4') handleToggleThermal();
-      if (e.key === '5') setActiveTool(VisualEffectState.RECTANGLE_DOTS);
-      if (e.key === '6') setActiveTool(VisualEffectState.LARGE_GEOMETRY);
-      if (e.key === '7') setActiveTool(VisualEffectState.PURPLE_PRISM);
+      if (e.key === '1' || e.key === 'p' || e.key === 'P') {
+        setActiveTool(prev => prev === VisualEffectState.PURPLE_PRISM ? VisualEffectState.NONE : VisualEffectState.PURPLE_PRISM);
+      }
       if (e.key === ' ' || e.key === 'Enter') handleCreateObject();
       if (e.key === 'Delete' || e.key === 'Backspace') handleDeleteSelected();
       if (e.key === 'h' || e.key === 'H') setShowHUD(p => !p);
@@ -275,11 +263,11 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCreateObject, handleDeleteSelected, handleToggleThermal]);
+  }, [handleCreateObject, handleDeleteSelected]);
 
   const handleCapture = useCallback(() => {
     if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-capture.png');
+      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-prism.png');
     }
   }, []);
 
@@ -306,36 +294,37 @@ export const MainView: React.FC<MainViewProps> = () => {
       {/* LAYER 1: TRANSPARENT THREE.JS WebGL ON-DEMAND AR CANVAS */}
       <div ref={arContainerRef} className="absolute inset-0 z-10 pointer-events-none" />
 
-      {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, MAGENTA FPS) */}
+      {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, DUAL FPS) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* COMPACT ARCHITECTURE DEBUG PANEL (TOP-RIGHT) */}
+      {/* MILESTONE DEBUG PANEL (TOP-RIGHT) */}
       {showDebug && (
-        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-cyan-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[210px]">
-          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-cyan-400">
-            <span>CORE PIPELINE</span>
+        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-purple-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[220px]">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-purple-400">
+            <span>PRISM MILESTONE</span>
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           </div>
           <div className="flex justify-between"><span className="text-white/60">CAMERA:</span> <span className={cameraStatus === 'ACTIVE' ? 'text-green-400 font-bold' : 'text-yellow-400'}>{cameraStatus}</span></div>
           <div className="flex justify-between"><span className="text-white/60">VIDEO:</span> <span>{videoDimensions}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">HANDS:</span> <span className="text-pink-400 font-bold">{latestHandsRef.current.length}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">VISION FPS:</span> <span>{perfMetrics.visionFps}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">RENDER FPS:</span> <span>{perfMetrics.renderFps}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-cyan-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">HANDS:</span> <span className="text-pink-400 font-bold">{debugStats.handsCount}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">GESTURE:</span> <span className="text-yellow-300 font-bold">{debugStats.gesture}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">RENDER:</span> <span className="text-green-400 font-bold">{debugStats.renderFps} FPS</span></div>
+          <div className="flex justify-between"><span className="text-white/60">VISION:</span> <span className="text-cyan-300 font-bold">{debugStats.visionFps} FPS</span></div>
+          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-purple-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
           <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
-          <div className="flex justify-between"><span className="text-white/60">WEBGL:</span> <span className="text-emerald-400">OK (TRANSPARENT)</span></div>
+          <div className="flex justify-between"><span className="text-white/60">SELECTED:</span> <span className="text-pink-400 font-bold">{debugStats.selectedId}</span></div>
           <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle panel</div>
         </div>
       )}
 
-      {/* LAYER 3: TOOLBAR WITH OBJECT TOOLS, THERMAL TOGGLE & CREATE/DELETE */}
+      {/* LAYER 3: TOOLBAR WITH PRISM SELECTOR, CREATE, DELETE & CLEAR */}
       <ControlBar
         activeTool={activeTool}
-        isThermalActive={isThermalActive}
+        isThermalActive={false}
         showHUD={showHUD}
         objectCount={objectCount}
         onSelectTool={setActiveTool}
-        onToggleThermal={handleToggleThermal}
+        onToggleThermal={() => {}}
         onCreateObject={handleCreateObject}
         onDeleteSelected={handleDeleteSelected}
         onClearAll={handleClearAll}

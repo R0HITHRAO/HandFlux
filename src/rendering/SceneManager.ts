@@ -22,10 +22,16 @@ export class SceneManager {
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
 
-    // 100% Transparent WebGL Canvas
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance'
+    });
+
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(this.width, this.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.autoClear = true;
 
@@ -56,17 +62,13 @@ export class SceneManager {
     cyanLight.position.set(-5, -5, 5);
     this.scene3D.add(cyanLight);
 
-    const goldLight = new THREE.DirectionalLight(0xfacc15, 3.0);
-    goldLight.position.set(0, 5, -2);
-    this.scene3D.add(goldLight);
-
     this.objectsGroup = new THREE.Group();
     this.scene3D.add(this.objectsGroup);
 
-    // Ghost Preview marker (small subtle ring at spawn location)
+    // Ghost Preview Prism (Faint translucent 3D outline at spawn position)
     this.ghostPreviewGroup = new THREE.Group();
-    const ghostGeo = new THREE.RingGeometry(0.12, 0.15, 24);
-    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+    const ghostGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.55, 6, 1, false);
+    const ghostMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, wireframe: true, transparent: true, opacity: 0.3 });
     const ghostMesh = new THREE.Mesh(ghostGeo, ghostMat);
     this.ghostPreviewGroup.add(ghostMesh);
     this.ghostPreviewGroup.visible = false;
@@ -80,15 +82,16 @@ export class SceneManager {
     gestures: GestureMetrics,
     activeTool: VisualEffectState,
     dt: number,
-    time: number
+    time: number,
+    renderScale: number = 1.0
   ): { creationTriggered: boolean; pinchHoldProgress: number } {
     const result = this.arobjectManager.update(hands, gestures, this.width, this.height, dt, time);
 
-    if (hands.length > 0 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
+    if (hands.length > 0 && activeTool === VisualEffectState.PURPLE_PRISM) {
       this.ghostPreviewGroup.visible = true;
       const { worldPos } = this.arobjectManager.calculateSpawnPosition(hands[0], this.width, this.height);
       this.ghostPreviewGroup.position.copy(worldPos);
-      this.ghostPreviewGroup.rotation.z = time * 2.0;
+      this.ghostPreviewGroup.rotation.y = time * 1.5;
     } else {
       this.ghostPreviewGroup.visible = false;
     }

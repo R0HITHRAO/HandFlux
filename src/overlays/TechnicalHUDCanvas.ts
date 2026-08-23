@@ -30,7 +30,8 @@ export class TechnicalHUDCanvas {
     selectedObjId: string | null,
     creationHoldProgress: number,
     options: HUDOptions,
-    fps: number,
+    renderFps: number,
+    visionFps: number,
     time: number = performance.now() / 1000
   ): void {
     const ctx = this.ctx;
@@ -39,27 +40,27 @@ export class TechnicalHUDCanvas {
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. TOP-LEFT MAGENTA FPS & ACTIVE TOOL
+    // 1. TOP-LEFT MAGENTA DUAL FPS & ACTIVE TOOL
     ctx.save();
-    ctx.font = 'bold 22px "JetBrains Mono", monospace';
+    ctx.font = 'bold 20px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ff00dc';
     ctx.shadowColor = '#ff00dc';
-    ctx.shadowBlur = 10;
-    ctx.fillText('FPS: ' + Math.round(fps), 24, 42);
+    ctx.shadowBlur = 8;
+    ctx.fillText('RENDER: ' + renderFps + ' FPS | VISION: ' + visionFps + ' FPS', 24, 38);
 
     ctx.font = '12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
     ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 5;
     const toolName = EFFECT_CONFIGS[activeTool]?.name || 'NONE';
-    ctx.fillText('TOOL: ' + toolName + ' | OBJECTS: ' + objects.length + '/5', 24, 64);
+    ctx.fillText('CURRENT TOOL: ' + toolName + ' | OBJECTS: ' + objects.length + '/5', 24, 60);
     ctx.restore();
 
     // 2. VERTICAL GREEN INTERACTION METER (LEFT)
     const meterX = 24;
-    const meterY = 100;
+    const meterY = 90;
     const meterWidth = 18;
-    const meterHeight = Math.min(340, h - 220);
+    const meterHeight = Math.min(320, h - 210);
 
     let meterPercent = 0;
     let meterLabel = 'SIGNAL';
@@ -112,10 +113,7 @@ export class TechnicalHUDCanvas {
     }
     ctx.restore();
 
-    // 3. HAND TRACKING OVERLAYS (EXACT REFERENCE)
-    if (hands.length === 0) {
-      return; // Do not show any confusing center box
-    }
+    if (hands.length === 0) return;
 
     const fingerChains = [
       [0, 1, 2, 3, 4],
@@ -206,8 +204,7 @@ export class TechnicalHUDCanvas {
         ctx.fillStyle = '#ff00dc';
         ctx.fill();
 
-        // Radial Pinch-to-Create Progress Ring
-        if (creationHoldProgress > 0.05 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
+        if (creationHoldProgress > 0.05 && activeTool === VisualEffectState.PURPLE_PRISM) {
           const midX = (thumbTip.screenX + indexTip.screenX) * 0.5;
           const midY = (thumbTip.screenY + indexTip.screenY) * 0.5;
 
@@ -220,12 +217,11 @@ export class TechnicalHUDCanvas {
           ctx.font = 'bold 11px "JetBrains Mono", monospace';
           ctx.fillStyle = '#00f5ff';
           ctx.textAlign = 'center';
-          ctx.fillText('HOLD TO CREATE ' + (EFFECT_CONFIGS[activeTool]?.name || 'OBJ'), midX, midY - 32);
+          ctx.fillText('HOLD TO CREATE PRISM', midX, midY - 32);
         }
         ctx.restore();
       }
 
-      // Hand Label (#1 LEFT / #2 RIGHT) & Coordinates
       ctx.save();
       ctx.font = 'bold 12px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00ff00';
@@ -251,24 +247,24 @@ export class TechnicalHUDCanvas {
       ctx.restore();
     });
 
-    // 4. ACTIVE OBJECT SELECTION BRACKETS
-    objects.forEach(obj => {
+    // 4. ACTIVE PRISM SELECTION BRACKETS
+    objects.forEach((obj, idx) => {
       const isSelected = obj.id === selectedObjId;
       const screenX = (obj.position.x / (w / h * 2 * Math.tan(Math.PI / 6) * 5) + 0.5) * w;
       const screenY = (0.5 - obj.position.y / (2 * Math.tan(Math.PI / 6) * 5)) * h;
 
       ctx.save();
-      ctx.strokeStyle = isSelected ? '#ff00dc' : 'rgba(0, 245, 255, 0.6)';
+      ctx.strokeStyle = isSelected ? '#ff00dc' : 'rgba(192, 132, 252, 0.7)';
       ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      ctx.shadowColor = isSelected ? '#ff00dc' : '#00f5ff';
+      ctx.shadowColor = isSelected ? '#ff00dc' : '#c084fc';
       ctx.shadowBlur = isSelected ? 12 : 6;
 
       const sz = 24;
       ctx.strokeRect(screenX - sz, screenY - sz, sz * 2, sz * 2);
 
-      ctx.font = '10px "JetBrains Mono", monospace';
-      ctx.fillStyle = isSelected ? '#ff00dc' : '#00f5ff';
-      ctx.fillText('[' + (EFFECT_CONFIGS[obj.type]?.name || 'OBJ') + ']', screenX - sz, screenY - sz - 6);
+      ctx.font = 'bold 10px "JetBrains Mono", monospace';
+      ctx.fillStyle = isSelected ? '#ff00dc' : '#c084fc';
+      ctx.fillText('[PRISM #' + (idx + 1) + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
       ctx.restore();
     });
   }
