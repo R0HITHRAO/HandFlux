@@ -266,15 +266,16 @@ export class ARObjectManager {
       let isHandNear = false;
       let controllingHand: HandLandmarks | null = null;
 
-      hands.forEach(h => {
+      for (const h of hands) {
         const w = screenToThreeWorld(h.indexTip.screenX, h.indexTip.screenY, screenWidth, screenHeight);
         const handPos = new THREE.Vector3(w.x, w.y, w.z);
         const dist = handPos.distanceTo(obj.position);
         if (dist < 1.4) {
           isHandNear = true;
           controllingHand = h;
+          break;
         }
-      });
+      }
 
       if (isHandNear && gestures.isPinching && controllingHand) {
         obj.state = 'GRABBED';
