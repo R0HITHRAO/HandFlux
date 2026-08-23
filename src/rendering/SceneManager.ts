@@ -1,24 +1,18 @@
 import * as THREE from 'three';
-import { TrackedPlaneMesh } from '../geometry/TrackedPlaneMesh';
-import { TriangleWedgesMesh } from '../geometry/TriangleWedgesMesh';
-import { GlowingBlocksMesh } from '../geometry/GlowingBlocksMesh';
-import { LargeStructureMesh } from '../geometry/LargeStructureMesh';
-import { PurplePrismMesh } from '../geometry/PurplePrismMesh';
+import { ARObjectManager } from '../state/ARObjectManager';
 import { HandLandmarks } from '../types/vision';
+import { GestureMetrics } from '../types/gestures';
 import { VisualEffectState } from '../types/effects';
-import { EffectManager } from '../state/EffectManager';
 
 export class SceneManager {
   private container: HTMLDivElement;
   private renderer: THREE.WebGLRenderer;
   private scene3D: THREE.Scene;
   private camera3D: THREE.PerspectiveCamera;
+  private objectsGroup: THREE.Group;
+  private ghostPreviewGroup: THREE.Group;
 
-  public trackedPlane: TrackedPlaneMesh;
-  public triangleWedges: TriangleWedgesMesh;
-  public glowingBlocks: GlowingBlocksMesh;
-  public largeStructure: LargeStructureMesh;
-  public purplePrism: PurplePrismMesh;
+  public arobjectManager: ARObjectManager;
 
   private width: number = 1280;
   private height: number = 720;
@@ -50,67 +44,58 @@ export class SceneManager {
     this.camera3D.position.set(0, 0, 5);
     this.camera3D.lookAt(0, 0, 0);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.8);
     this.scene3D.add(ambientLight);
-
-    const magentaLight = new THREE.DirectionalLight(0xff00ff, 4.0);
+    
+    const magentaLight = new THREE.DirectionalLight(0xff00ff, 4.5);
     magentaLight.position.set(5, 5, 5);
     this.scene3D.add(magentaLight);
 
-    const cyanLight = new THREE.DirectionalLight(0x00f5ff, 4.0);
+    const cyanLight = new THREE.DirectionalLight(0x00f5ff, 4.5);
     cyanLight.position.set(-5, -5, 5);
     this.scene3D.add(cyanLight);
 
-    const goldLight = new THREE.DirectionalLight(0xfacc15, 3.0);
+    const goldLight = new THREE.DirectionalLight(0xfacc15, 3.5);
     goldLight.position.set(0, 5, -2);
     this.scene3D.add(goldLight);
 
-    this.trackedPlane = new TrackedPlaneMesh();
-    this.scene3D.add(this.trackedPlane.group);
+    this.objectsGroup = new THREE.Group();
+    this.scene3D.add(this.objectsGroup);
 
-    this.triangleWedges = new TriangleWedgesMesh();
-    this.scene3D.add(this.triangleWedges.group);
+    this.ghostPreviewGroup = new THREE.Group();
+    const ghostGeo = new THREE.RingGeometry(0.25, 0.3, 32);
+    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const ghostMesh = new THREE.Mesh(ghostGeo, ghostMat);
+    this.ghostPreviewGroup.add(ghostMesh);
+    this.ghostPreviewGroup.visible = false;
+    this.scene3D.add(this.ghostPreviewGroup);
 
-    this.glowingBlocks = new GlowingBlocksMesh();
-    this.scene3D.add(this.glowingBlocks.group);
-
-    this.largeStructure = new LargeStructureMesh();
-    this.scene3D.add(this.largeStructure.group);
-
-    this.purplePrism = new PurplePrismMesh();
-    this.scene3D.add(this.purplePrism.group);
+    this.arobjectManager = new ARObjectManager(this.objectsGroup);
   }
 
   public updateAndRender(
     hands: HandLandmarks[],
-    effectManager: EffectManager,
+    gestures: GestureMetrics,
+    activeTool: VisualEffectState,
+    isRawCamera: boolean,
+    dt: number,
     time: number
   ): void {
-    if (effectManager.isRawCamera()) {
+    if (isRawCamera) {
       this.renderer.clear();
       return;
     }
 
-    const rectHatchOpacity = effectManager.getOpacity(VisualEffectState.RECTANGLE_TRACKING);
-    const rectDotsOpacity = effectManager.getOpacity(VisualEffectState.RECTANGLE_DOTS);
-    const wedgeOpacity = Math.max(
-      effectManager.getOpacity(VisualEffectState.TRIANGLE_EFFECT),
-      effectManager.getOpacity(VisualEffectState.ANGULAR_OBJECT)
-    );
-    const blocksOpacity = effectManager.getOpacity(VisualEffectState.GLOW_BLOCKS);
-    const largeOpacity = effectManager.getOpacity(VisualEffectState.LARGE_GEOMETRY);
-    const prismOpacity = effectManager.getOpacity(VisualEffectState.PURPLE_PRISM);
+    this.arobjectManager.update(hands, gestures, this.width, this.height, dt, time);
 
-    if (rectDotsOpacity > 0.05) {
-      this.trackedPlane.update(hands, this.width, this.height, time, 1, rectDotsOpacity);
+    if (hands.length > 0 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
+      this.ghostPreviewGroup.visible = true;
+      const { worldPos } = this.arobjectManager.calculateSpawnPosition(hands[0], this.width, this.height);
+      this.ghostPreviewGroup.position.copy(worldPos);
+      this.ghostPreviewGroup.rotation.z = time * 2.0;
     } else {
-      this.trackedPlane.update(hands, this.width, this.height, time, 0, rectHatchOpacity);
+      this.ghostPreviewGroup.visible = false;
     }
-
-    this.triangleWedges.update(hands, this.width, this.height, time, wedgeOpacity);
-    this.glowingBlocks.update(hands, this.width, this.height, time, blocksOpacity);
-    this.largeStructure.update(hands, this.width, this.height, time, largeOpacity);
-    this.purplePrism.update(hands, this.width, this.height, time, prismOpacity);
 
     this.renderer.render(this.scene3D, this.camera3D);
   }

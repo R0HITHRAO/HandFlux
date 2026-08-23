@@ -1,6 +1,7 @@
 import { HandLandmarks } from '../types/vision';
 import { GestureMetrics } from '../types/gestures';
-import { VisualEffectState } from '../types/effects';
+import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
+import { ARObjectInstance } from '../types/objects';
 
 export interface HUDOptions {
   showLandmarks: boolean;
@@ -24,7 +25,10 @@ export class TechnicalHUDCanvas {
   public render(
     hands: HandLandmarks[],
     gestures: GestureMetrics,
-    state: VisualEffectState,
+    activeTool: VisualEffectState,
+    objects: ARObjectInstance[],
+    selectedObjId: string | null,
+    creationHoldProgress: number,
     options: HUDOptions,
     fps: number,
     time: number = performance.now() / 1000
@@ -35,33 +39,23 @@ export class TechnicalHUDCanvas {
 
     ctx.clearRect(0, 0, w, h);
 
-    // ==========================================
-    // 1. TOP-LEFT MAGENTA FPS INDICATOR
-    // ==========================================
+    // 1. TOP-LEFT MAGENTA FPS & ACTIVE TOOL
     ctx.save();
     ctx.font = 'bold 22px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ff00dc';
     ctx.shadowColor = '#ff00dc';
     ctx.shadowBlur = 10;
-    ctx.fillText(`FPS: ${Math.round(fps)}`, 24, 42);
+    ctx.fillText('FPS: ' + Math.round(fps), 24, 42);
 
-    // Sub-label for tracking status
     ctx.font = '12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
     ctx.shadowColor = '#00ff00';
     ctx.shadowBlur = 6;
-    ctx.fillText(
-      hands.length > 0
-        ? `HANDS DETECTED: ${hands.length} | GESTURE: ${gestures.primaryGesture}`
-        : 'LOOKING FOR HANDS...',
-      24,
-      64
-    );
+    const toolName = EFFECT_CONFIGS[activeTool]?.name || 'NONE';
+    ctx.fillText('TOOL: ' + toolName + ' | OBJECTS: ' + objects.length + '/5', 24, 64);
     ctx.restore();
 
-    // ==========================================
     // 2. VERTICAL GREEN INTERACTION METER (LEFT)
-    // ==========================================
     const meterX = 24;
     const meterY = 100;
     const meterWidth = 18;
@@ -82,28 +76,24 @@ export class TechnicalHUDCanvas {
     }
 
     ctx.save();
-    // Meter Labels: 100 & 0
     ctx.font = 'bold 12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
     ctx.fillText('100', meterX + meterWidth + 8, meterY + 12);
     ctx.fillText('0', meterX + meterWidth + 8, meterY + meterHeight);
 
-    // Dynamic Label
     ctx.fillStyle = '#ff00dc';
-    ctx.fillText(`${meterLabel}: ${meterPercent}%`, meterX, meterY - 12);
+    ctx.fillText(meterLabel + ': ' + meterPercent + '%', meterX, meterY - 12);
 
-    // Meter Background Box
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 2;
     ctx.shadowColor = '#00ff00';
     ctx.shadowBlur = 8;
     ctx.strokeRect(meterX, meterY, meterWidth, meterHeight);
 
-    // Inner Grid Hash Marks
+    const steps = 10;
     ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
     ctx.lineWidth = 1;
     ctx.shadowBlur = 0;
-    const steps = 10;
     for (let i = 1; i < steps; i++) {
       const lineY = meterY + (meterHeight / steps) * i;
       ctx.beginPath();
@@ -112,11 +102,9 @@ export class TechnicalHUDCanvas {
       ctx.stroke();
     }
 
-    // Active Filled Bar
     if (meterPercent > 0) {
       const fillHeight = (meterHeight * meterPercent) / 100;
       const fillY = meterY + meterHeight - fillHeight;
-
       ctx.fillStyle = '#00ff00';
       ctx.shadowColor = '#00ff00';
       ctx.shadowBlur = 12;
@@ -124,9 +112,7 @@ export class TechnicalHUDCanvas {
     }
     ctx.restore();
 
-    // ==========================================
-    // 3. HAND TRACKING OVERLAYS
-    // ==========================================
+    // 3. HAND TRACKING OVERLAYS (EXACT REFERENCE)
     if (hands.length === 0) {
       ctx.save();
       const cx = w * 0.5;
@@ -134,32 +120,25 @@ export class TechnicalHUDCanvas {
       ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(cx - 90, cy - 65, 180, 130);
-      ctx.beginPath();
-      ctx.moveTo(cx - 20, cy); ctx.lineTo(cx + 20, cy);
-      ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy + 20);
-      ctx.stroke();
-
       ctx.font = '12px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00ff00';
       ctx.textAlign = 'center';
-      ctx.fillText('[ POSITION HAND IN CAMERA FRAME ]', cx, cy + 85);
+      ctx.fillText('[ POSITION HAND TO CREATE AR OBJECTS ]', cx, cy + 85);
       ctx.restore();
       return;
     }
 
     const fingerChains = [
-      [0, 1, 2, 3, 4],    // Thumb
-      [0, 5, 6, 7, 8],    // Index
-      [0, 9, 10, 11, 12],  // Middle
-      [0, 13, 14, 15, 16], // Ring
-      [0, 17, 18, 19, 20], // Pinky
-      [5, 9, 13, 17, 0]    // Palm Base
+      [0, 1, 2, 3, 4],
+      [0, 5, 6, 7, 8],
+      [0, 9, 10, 11, 12],
+      [0, 13, 14, 15, 16],
+      [0, 17, 18, 19, 20],
+      [5, 9, 13, 17, 0]
     ];
 
     hands.forEach((hand, handIdx) => {
-      // ----------------------------------------------------
-      // A. BRIGHT GREEN SKELETON
-      // ----------------------------------------------------
+      // Green Skeleton
       if (options.showLandmarks) {
         ctx.save();
         ctx.strokeStyle = '#00ff00';
@@ -181,19 +160,16 @@ export class TechnicalHUDCanvas {
         ctx.restore();
       }
 
-      // ----------------------------------------------------
-      // B. RED LANDMARK POINTS (Small circular red dots)
-      // ----------------------------------------------------
+      // Red Landmarks
       if (options.showLandmarks) {
         ctx.save();
-        hand.landmarks.forEach((pt) => {
+        hand.landmarks.forEach(pt => {
           ctx.beginPath();
           ctx.arc(pt.screenX, pt.screenY, 4.0, 0, Math.PI * 2);
           ctx.fillStyle = '#ff2828';
           ctx.shadowColor = '#ff2828';
           ctx.shadowBlur = 6;
           ctx.fill();
-
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 1.0;
           ctx.stroke();
@@ -201,9 +177,7 @@ export class TechnicalHUDCanvas {
         ctx.restore();
       }
 
-      // ----------------------------------------------------
-      // C. PRIMARY INTERACTION HIGHLIGHT (MAGENTA INDEX TIP)
-      // ----------------------------------------------------
+      // Primary Interaction Point on Index Tip
       const indexTip = hand.indexTip;
       const thumbTip = hand.thumbTip;
 
@@ -223,9 +197,7 @@ export class TechnicalHUDCanvas {
       ctx.stroke();
       ctx.restore();
 
-      // ----------------------------------------------------
-      // D. PINCH INTERACTION LINE (BRIGHT MAGENTA)
-      // ----------------------------------------------------
+      // Magenta Pinch Line
       const pinchDist = Math.hypot(thumbTip.screenX - indexTip.screenX, thumbTip.screenY - indexTip.screenY);
       const isPinchActive = pinchDist < 75;
 
@@ -235,7 +207,6 @@ export class TechnicalHUDCanvas {
         ctx.lineWidth = 3.5;
         ctx.shadowColor = '#ff00dc';
         ctx.shadowBlur = 16;
-
         ctx.beginPath();
         ctx.moveTo(thumbTip.screenX, thumbTip.screenY);
         ctx.lineTo(indexTip.screenX, indexTip.screenY);
@@ -246,27 +217,33 @@ export class TechnicalHUDCanvas {
         ctx.fillStyle = '#ff00dc';
         ctx.fill();
 
-        const midX = (thumbTip.screenX + indexTip.screenX) * 0.5;
-        const midY = (thumbTip.screenY + indexTip.screenY) * 0.5;
+        // Radial Pinch-to-Create Progress Ring
+        if (creationHoldProgress > 0.05 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
+          const midX = (thumbTip.screenX + indexTip.screenX) * 0.5;
+          const midY = (thumbTip.screenY + indexTip.screenY) * 0.5;
 
-        ctx.font = 'bold 12px "JetBrains Mono", monospace';
-        ctx.fillStyle = '#ff00dc';
-        ctx.shadowColor = '#ff00dc';
-        ctx.shadowBlur = 8;
-        ctx.fillText(`PINCH: ${meterPercent}%`, midX + 14, midY - 6);
+          ctx.beginPath();
+          ctx.arc(midX, midY, 28, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * creationHoldProgress);
+          ctx.strokeStyle = '#00f5ff';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          ctx.font = 'bold 11px "JetBrains Mono", monospace';
+          ctx.fillStyle = '#00f5ff';
+          ctx.textAlign = 'center';
+          ctx.fillText('CREATING ' + (EFFECT_CONFIGS[activeTool]?.name || 'OBJ') + '...', midX, midY - 35);
+        }
         ctx.restore();
       }
 
-      // ----------------------------------------------------
-      // E. HAND LABEL (#1 LEFT / #2 RIGHT) & COORDINATES
-      // ----------------------------------------------------
+      // Hand Label (#1 LEFT / #2 RIGHT) & Coordinates
       ctx.save();
       ctx.font = 'bold 12px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00ff00';
       ctx.shadowColor = '#00ff00';
       ctx.shadowBlur = 6;
       ctx.fillText(
-        `#${handIdx + 1} ${hand.handedness.toUpperCase()}`,
+        '#' + (handIdx + 1) + ' ' + hand.handedness.toUpperCase(),
         hand.boundingBox.minX,
         hand.boundingBox.minY - 12
       );
@@ -277,7 +254,7 @@ export class TechnicalHUDCanvas {
         ctx.shadowColor = '#00f5ff';
         ctx.shadowBlur = 4;
         ctx.fillText(
-          `x:${Math.round(indexTip.screenX)} y:${Math.round(indexTip.screenY)}`,
+          'x:' + Math.round(indexTip.screenX) + ' y:' + Math.round(indexTip.screenY),
           indexTip.screenX + 16,
           indexTip.screenY + 4
         );
@@ -285,18 +262,25 @@ export class TechnicalHUDCanvas {
       ctx.restore();
     });
 
-    if (options.showGuides && hands.length >= 2) {
-      const h1 = hands[0];
-      const h2 = hands[1];
+    // 4. ACTIVE OBJECT SELECTION BRACKETS
+    objects.forEach(obj => {
+      const isSelected = obj.id === selectedObjId;
+      const screenX = (obj.position.x / (w / h * 2 * Math.tan(Math.PI / 6) * 5) + 0.5) * w;
+      const screenY = (0.5 - obj.position.y / (2 * Math.tan(Math.PI / 6) * 5)) * h;
+
       ctx.save();
-      ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
-      ctx.setLineDash([5, 5]);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(h1.palmCenter.screenX, h1.palmCenter.screenY);
-      ctx.lineTo(h2.palmCenter.screenX, h2.palmCenter.screenY);
-      ctx.stroke();
+      ctx.strokeStyle = isSelected ? '#ff00dc' : 'rgba(0, 245, 255, 0.6)';
+      ctx.lineWidth = isSelected ? 2.5 : 1.5;
+      ctx.shadowColor = isSelected ? '#ff00dc' : '#00f5ff';
+      ctx.shadowBlur = isSelected ? 12 : 6;
+
+      const sz = 38;
+      ctx.strokeRect(screenX - sz, screenY - sz, sz * 2, sz * 2);
+
+      ctx.font = '10px "JetBrains Mono", monospace';
+      ctx.fillStyle = isSelected ? '#ff00dc' : '#00f5ff';
+      ctx.fillText('[' + (EFFECT_CONFIGS[obj.type]?.name || 'OBJ') + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
       ctx.restore();
-    }
+    });
   }
 }
