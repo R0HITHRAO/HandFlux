@@ -30,20 +30,35 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onToggleFullscreen,
 }) => {
   const isPrismSelected = activeTool === VisualEffectState.PURPLE_PRISM;
+  const isHatchSelected = activeTool === VisualEffectState.RECTANGLE_TRACKING;
+  const toolName = isHatchSelected ? 'HATCH' : isPrismSelected ? 'PRISM' : 'NONE';
 
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center space-y-2 pointer-events-auto max-w-[95vw]">
       {/* Top Status Banner */}
-      <div className="px-3.5 py-1.5 bg-black/90 backdrop-blur-md border border-purple-500/40 rounded-full text-xs font-mono flex items-center space-x-2.5 shadow-xl">
-        <span className={`w-2 h-2 rounded-full ${isPrismSelected ? 'bg-purple-400 animate-pulse' : 'bg-gray-400'}`} />
-        <span className="text-white/70">TOOL:</span>
-        <span className="text-purple-300 font-bold">{isPrismSelected ? 'PRISM' : 'NONE'}</span>
+      <div className="px-3.5 py-1.5 bg-black/90 backdrop-blur-md border border-cyan-500/40 rounded-full text-xs font-mono flex items-center space-x-2.5 shadow-xl">
+        <span className={`w-2 h-2 rounded-full ${toolName !== 'NONE' ? 'bg-cyan-400 animate-pulse' : 'bg-gray-400'}`} />
+        <span className="text-white/70">CURRENT TOOL:</span>
+        <span className="text-cyan-300 font-bold">{toolName}</span>
         <span className="text-white/40">|</span>
-        <span className="text-pink-400 font-semibold">{isPrismSelected ? 'PINCH & HOLD (400ms) OR PRESS [ ✚ CREATE ]' : 'CLICK [ PRISM ] TO SELECT TOOL'}</span>
+        <span className="text-pink-400 font-semibold">{toolName !== 'NONE' ? 'PINCH & HOLD (400ms) OR PRESS [ ✚ CREATE ]' : 'CLICK [ HATCH ] OR [ PRISM ] TO SELECT TOOL'}</span>
       </div>
 
       {/* Main Action Bar */}
       <div className="flex items-center space-x-2 p-1.5 bg-black/85 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl">
+        {/* HATCH Tool Selector */}
+        <button
+          onClick={() => onSelectTool(isHatchSelected ? VisualEffectState.NONE : VisualEffectState.RECTANGLE_TRACKING)}
+          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all duration-150 flex items-center space-x-1.5 ${
+            isHatchSelected
+              ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/50 scale-105'
+              : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+          }`}
+          title="Select Hatch Digital Plane (Press 1 or H)"
+        >
+          <span>📐 1: HATCH</span>
+        </button>
+
         {/* PRISM Tool Selector */}
         <button
           onClick={() => onSelectTool(isPrismSelected ? VisualEffectState.NONE : VisualEffectState.PURPLE_PRISM)}
@@ -52,9 +67,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50 scale-105'
               : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
           }`}
-          title="Select Prism Tool (Press 1 or P)"
+          title="Select Prism Crystal (Press 2 or P)"
         >
-          <span>💎 PRISM</span>
+          <span>💎 2: PRISM</span>
         </button>
 
         <div className="w-[1px] h-6 bg-white/20" />
@@ -63,10 +78,10 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <button
           onClick={onCreateObject}
           className="px-3.5 py-2 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 shadow-lg shadow-pink-500/40 active:scale-95 transition-transform"
-          title="Create Prism at Hand Position (Space / Enter / Pinch-Hold)"
+          title="Create Shape at Hand Position (Space / Enter / Pinch-Hold)"
         >
           <PlusCircle className="w-4 h-4" />
-          <span>CREATE PRISM</span>
+          <span>CREATE {toolName !== 'NONE' ? toolName : 'OBJECT'}</span>
         </button>
 
         {/* DELETE Button */}
@@ -74,7 +89,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           onClick={onDeleteSelected}
           disabled={objectCount === 0}
           className="px-3 py-2 bg-red-950/50 hover:bg-red-900/80 text-red-300 disabled:opacity-30 disabled:pointer-events-none border border-red-500/30 rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5"
-          title="Delete Selected Prism (Delete / Backspace)"
+          title="Delete Selected Object (Delete / Backspace)"
         >
           <Trash2 className="w-3.5 h-3.5" />
           <span>DELETE</span>
@@ -85,7 +100,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
           onClick={onClearAll}
           disabled={objectCount === 0}
           className="px-3 py-2 bg-white/5 hover:bg-white/15 text-white/70 disabled:opacity-30 disabled:pointer-events-none rounded-lg text-xs font-mono flex items-center space-x-1.5"
-          title="Clear all prisms"
+          title="Clear all objects"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>CLEAR ({objectCount})</span>

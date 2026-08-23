@@ -29,7 +29,7 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
-  // Milestone 1 Requirement: Initial state CURRENT TOOL = NONE, OBJECTS = 0
+  // Milestone Initial State: CURRENT TOOL = NONE, OBJECTS = 0
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
@@ -108,16 +108,16 @@ export const MainView: React.FC<MainViewProps> = () => {
     if (hands.length === 0) return;
 
     const newObj = sceneManagerRef.current.arobjectManager.createObjectAtHand(
-      VisualEffectState.PURPLE_PRISM,
+      activeTool,
       hands[0],
       window.innerWidth,
       window.innerHeight
     );
     if (newObj) {
-      setActiveTool(VisualEffectState.PURPLE_PRISM);
+      setActiveTool(newObj.type);
       setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
     }
-  }, []);
+  }, [activeTool]);
 
   const handleDeleteSelected = useCallback(() => {
     if (!sceneManagerRef.current) return;
@@ -176,12 +176,18 @@ export const MainView: React.FC<MainViewProps> = () => {
       const gestures = gestureEngineRef.current.processHands(hands, window.innerWidth, window.innerHeight);
       const selected = sceneManagerRef.current?.arobjectManager.getSelectedObject();
 
+      let selectedLabel = 'NONE';
+      if (selected) {
+        const typeName = (selected.type === VisualEffectState.RECTANGLE_TRACKING) ? 'HATCH' : 'PRISM';
+        selectedLabel = typeName + ' [' + selected.state + ']';
+      }
+
       setDebugStats({
         renderFps: m.renderFps,
         visionFps: m.visionFps,
         handsCount: hands.length,
         gesture: gestures.primaryGesture,
-        selectedId: selected ? (selected.state === 'GRABBED' ? 'PRISM [GRABBED]' : 'PRISM [SELECTED]') : 'NONE'
+        selectedId: selectedLabel
       });
     }, 200);
     return () => clearInterval(interval);
@@ -253,12 +259,14 @@ export const MainView: React.FC<MainViewProps> = () => {
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '1' || e.key === 'p' || e.key === 'P') {
+      if (e.key === '1' || e.key === 'h' || e.key === 'H') {
+        setActiveTool(prev => prev === VisualEffectState.RECTANGLE_TRACKING ? VisualEffectState.NONE : VisualEffectState.RECTANGLE_TRACKING);
+      }
+      if (e.key === '2' || e.key === 'p' || e.key === 'P') {
         setActiveTool(prev => prev === VisualEffectState.PURPLE_PRISM ? VisualEffectState.NONE : VisualEffectState.PURPLE_PRISM);
       }
       if (e.key === ' ' || e.key === 'Enter') handleCreateObject();
       if (e.key === 'Delete' || e.key === 'Backspace') handleDeleteSelected();
-      if (e.key === 'h' || e.key === 'H') setShowHUD(p => !p);
       if (e.key === 'd' || e.key === 'D') setShowDebug(p => !p);
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -267,7 +275,7 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const handleCapture = useCallback(() => {
     if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-prism.png');
+      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-hatch.png');
     }
   }, []);
 
@@ -299,9 +307,9 @@ export const MainView: React.FC<MainViewProps> = () => {
 
       {/* MILESTONE DEBUG PANEL (TOP-RIGHT) */}
       {showDebug && (
-        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-purple-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[220px]">
-          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-purple-400">
-            <span>PRISM MILESTONE</span>
+        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-cyan-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[220px]">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-cyan-400">
+            <span>CORE AR ENGINE</span>
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           </div>
           <div className="flex justify-between"><span className="text-white/60">CAMERA:</span> <span className={cameraStatus === 'ACTIVE' ? 'text-green-400 font-bold' : 'text-yellow-400'}>{cameraStatus}</span></div>
@@ -310,14 +318,14 @@ export const MainView: React.FC<MainViewProps> = () => {
           <div className="flex justify-between"><span className="text-white/60">GESTURE:</span> <span className="text-yellow-300 font-bold">{debugStats.gesture}</span></div>
           <div className="flex justify-between"><span className="text-white/60">RENDER:</span> <span className="text-green-400 font-bold">{debugStats.renderFps} FPS</span></div>
           <div className="flex justify-between"><span className="text-white/60">VISION:</span> <span className="text-cyan-300 font-bold">{debugStats.visionFps} FPS</span></div>
-          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-purple-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-cyan-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
           <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
           <div className="flex justify-between"><span className="text-white/60">SELECTED:</span> <span className="text-pink-400 font-bold">{debugStats.selectedId}</span></div>
           <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle panel</div>
         </div>
       )}
 
-      {/* LAYER 3: TOOLBAR WITH PRISM SELECTOR, CREATE, DELETE & CLEAR */}
+      {/* LAYER 3: TOOLBAR WITH HATCH & PRISM SELECTORS, CREATE, DELETE & CLEAR */}
       <ControlBar
         activeTool={activeTool}
         isThermalActive={false}

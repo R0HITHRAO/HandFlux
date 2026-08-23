@@ -26,7 +26,7 @@ export interface EffectConfig {
 export const EFFECT_CONFIGS: Record<VisualEffectState, EffectConfig> = {
   [VisualEffectState.NONE]: { name: 'NONE', label: 'SELECT TOOL', description: 'No tool selected', hotkey: '0', primaryColor: '#ffffff', isObject: false },
   [VisualEffectState.PURPLE_PRISM]: { name: 'PRISM', label: 'PRISM', description: 'Translucent Lavender Crystal Prism', hotkey: '1', primaryColor: '#c084fc', isObject: true },
-  [VisualEffectState.RECTANGLE_TRACKING]: { name: 'HATCH', label: 'HATCH', description: 'Hatched Quad Plane', hotkey: '2', primaryColor: '#00f5ff', isObject: true },
+  [VisualEffectState.RECTANGLE_TRACKING]: { name: 'HATCH', label: 'HATCH', description: 'Laser-Hatched Quad Digital Plane', hotkey: '2', primaryColor: '#00f5ff', isObject: true },
   [VisualEffectState.TRIANGLE_EFFECT]: { name: 'WEDGES', label: 'WEDGES', description: 'Triangular Wedges', hotkey: '3', primaryColor: '#b829ea', isObject: true },
   [VisualEffectState.GLOW_BLOCKS]: { name: 'BLOCKS', label: 'BLOCKS', description: 'Glowing Cuboids', hotkey: '4', primaryColor: '#ff007f', isObject: true },
   [VisualEffectState.BLUR_TRANSITION]: { name: 'BLUR', label: 'BLUR', description: 'GPU Camera Blur', hotkey: 'B', primaryColor: '#9333ea', isObject: false },

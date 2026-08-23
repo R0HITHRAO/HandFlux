@@ -65,10 +65,10 @@ export class SceneManager {
     this.objectsGroup = new THREE.Group();
     this.scene3D.add(this.objectsGroup);
 
-    // Ghost Preview Prism (Faint translucent 3D outline at spawn position)
+    // Ghost Preview Outline at spawn location
     this.ghostPreviewGroup = new THREE.Group();
-    const ghostGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.55, 6, 1, false);
-    const ghostMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, wireframe: true, transparent: true, opacity: 0.3 });
+    const ghostGeo = new THREE.PlaneGeometry(0.7, 0.42);
+    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, wireframe: true, transparent: true, opacity: 0.35 });
     const ghostMesh = new THREE.Mesh(ghostGeo, ghostMat);
     this.ghostPreviewGroup.add(ghostMesh);
     this.ghostPreviewGroup.visible = false;
@@ -87,11 +87,11 @@ export class SceneManager {
   ): { creationTriggered: boolean; pinchHoldProgress: number } {
     const result = this.arobjectManager.update(hands, gestures, this.width, this.height, dt, time);
 
-    if (hands.length > 0 && activeTool === VisualEffectState.PURPLE_PRISM) {
+    if (hands.length > 0 && (activeTool === VisualEffectState.PURPLE_PRISM || activeTool === VisualEffectState.RECTANGLE_TRACKING)) {
       this.ghostPreviewGroup.visible = true;
       const { worldPos } = this.arobjectManager.calculateSpawnPosition(hands[0], this.width, this.height);
       this.ghostPreviewGroup.position.copy(worldPos);
-      this.ghostPreviewGroup.rotation.y = time * 1.5;
+      this.ghostPreviewGroup.rotation.z = time * 1.0;
     } else {
       this.ghostPreviewGroup.visible = false;
     }

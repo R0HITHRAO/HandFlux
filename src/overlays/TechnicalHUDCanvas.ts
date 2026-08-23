@@ -204,9 +204,10 @@ export class TechnicalHUDCanvas {
         ctx.fillStyle = '#ff00dc';
         ctx.fill();
 
-        if (creationHoldProgress > 0.05 && activeTool === VisualEffectState.PURPLE_PRISM) {
+        if (creationHoldProgress > 0.05 && activeTool !== VisualEffectState.NONE) {
           const midX = (thumbTip.screenX + indexTip.screenX) * 0.5;
           const midY = (thumbTip.screenY + indexTip.screenY) * 0.5;
+          const label = (activeTool === VisualEffectState.RECTANGLE_TRACKING) ? 'HATCH' : 'PRISM';
 
           ctx.beginPath();
           ctx.arc(midX, midY, 26, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * creationHoldProgress);
@@ -217,7 +218,7 @@ export class TechnicalHUDCanvas {
           ctx.font = 'bold 11px "JetBrains Mono", monospace';
           ctx.fillStyle = '#00f5ff';
           ctx.textAlign = 'center';
-          ctx.fillText('HOLD TO CREATE PRISM', midX, midY - 32);
+          ctx.fillText('HOLD TO CREATE ' + label, midX, midY - 32);
         }
         ctx.restore();
       }
@@ -247,24 +248,27 @@ export class TechnicalHUDCanvas {
       ctx.restore();
     });
 
-    // 4. ACTIVE PRISM SELECTION BRACKETS
+    // 4. ACTIVE OBJECT SELECTION BRACKETS
     objects.forEach((obj, idx) => {
       const isSelected = obj.id === selectedObjId;
       const screenX = (obj.position.x / (w / h * 2 * Math.tan(Math.PI / 6) * 5) + 0.5) * w;
       const screenY = (0.5 - obj.position.y / (2 * Math.tan(Math.PI / 6) * 5)) * h;
+      const isHatch = obj.type === VisualEffectState.RECTANGLE_TRACKING;
+      const tagColor = isHatch ? '#00f5ff' : '#c084fc';
+      const label = isHatch ? 'HATCH' : 'PRISM';
 
       ctx.save();
-      ctx.strokeStyle = isSelected ? '#ff00dc' : 'rgba(192, 132, 252, 0.7)';
+      ctx.strokeStyle = isSelected ? '#ff00dc' : tagColor;
       ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      ctx.shadowColor = isSelected ? '#ff00dc' : '#c084fc';
+      ctx.shadowColor = isSelected ? '#ff00dc' : tagColor;
       ctx.shadowBlur = isSelected ? 12 : 6;
 
-      const sz = 24;
+      const sz = 26;
       ctx.strokeRect(screenX - sz, screenY - sz, sz * 2, sz * 2);
 
       ctx.font = 'bold 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = isSelected ? '#ff00dc' : '#c084fc';
-      ctx.fillText('[PRISM #' + (idx + 1) + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
+      ctx.fillStyle = isSelected ? '#ff00dc' : tagColor;
+      ctx.fillText('[' + label + ' #' + (idx + 1) + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
       ctx.restore();
     });
   }
