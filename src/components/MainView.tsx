@@ -2,25 +2,22 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SceneManager } from '../rendering/SceneManager';
 import { TechnicalHUDCanvas, HUDOptions } from '../overlays/TechnicalHUDCanvas';
 import { HandLandmarkerService } from '../vision/HandLandmarkerService';
-import { SimulatedHandTracker } from '../vision/SimulatedHandTracker';
 import { GestureEngine } from '../vision/GestureEngine';
 import { CameraManager } from '../camera/CameraManager';
 import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
-import { VisualEffectState } from '../types/effects';
+import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { PerformanceMetrics } from '../types/performance';
 import { GestureMetrics } from '../types/gestures';
 import { HandLandmarks } from '../types/vision';
 import { ControlBar } from './ControlBar';
-import { DebugHUD } from './DebugHUD';
-import { ErrorModal } from './ErrorModal';
-import { captureCanvasScreenshot, CanvasRecorder } from '../utils/recording';
+import { captureCanvasScreenshot } from '../utils/recording';
 
 interface MainViewProps {
-  initialMode: 'LIVE' | 'DEMO';
-  initialUseSimulation: boolean;
+  initialMode?: 'LIVE' | 'DEMO';
+  initialUseSimulation?: boolean;
 }
 
-export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimulation }) => {
+export const MainView: React.FC<MainViewProps> = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const arContainerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,27 +26,19 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
   const cameraManagerRef = useRef<CameraManager>(new CameraManager());
   const visionServiceRef = useRef<HandLandmarkerService>(new HandLandmarkerService());
-  const simTrackerRef = useRef<SimulatedHandTracker>(new SimulatedHandTracker());
   const gestureEngineRef = useRef<GestureEngine>(new GestureEngine());
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
-  const recorderRef = useRef<CanvasRecorder>(new CanvasRecorder());
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
-  const [isDemo, setIsDemo] = useState(initialMode === 'DEMO');
-  const [isSimulated, setIsSimulated] = useState(initialUseSimulation);
+  // States
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.PURPLE_PRISM);
   const [isThermalActive, setIsThermalActive] = useState<boolean>(false);
   const [objectCount, setObjectCount] = useState<number>(0);
-  const [demoTime, setDemoTime] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [showHUD, setShowHUD] = useState(true);
-  const [showDebug, setShowDebug] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const pinchHoldDurationRef = useRef<number>(0);
-  const isPinchHoldTriggeredRef = useRef<boolean>(false);
+  const [showDebug, setShowDebug] = useState(true);
+  const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
+  const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
   const [perfMetrics, setPerfMetrics] = useState<PerformanceMetrics>({
     renderFps: 60,
@@ -102,47 +91,46 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    let isCancelled = false;
+    const initCameraAndVision = async () => {
+      try {
+        setCameraStatus('INITIALIZING VISION...');
+        await visionServiceRef.current.initialize();
 
-    const initVision = async () => {
-      await visionServiceRef.current.initialize();
-
-      if (!initialUseSimulation && videoRef.current) {
-        try {
+        if (videoRef.current) {
+          setCameraStatus('REQUESTING WEBCAM...');
           await cameraManagerRef.current.attachToVideo(videoRef.current);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn('Camera failed, switching to simulation:', err);
-          if (!isCancelled) {
-            setErrorMessage(msg);
-            setIsSimulated(true);
-          }
+          setCameraStatus('ACTIVE');
+          setVideoDimensions(videoRef.current.videoWidth + ' x ' + videoRef.current.videoHeight);
         }
+      } catch (err: any) {
+        console.error('Camera startup error:', err);
+        setCameraStatus('ERROR: ' + (err.message || 'Access Denied'));
       }
     };
 
-    initVision();
+    initCameraAndVision();
 
     return () => {
-      isCancelled = true;
       cameraManagerRef.current.stopCamera();
       window.removeEventListener('resize', handleResize);
     };
-  }, [initialUseSimulation]);
+  }, []);
 
-  // 2. Creation Handlers
+  // 2. Explicit User Creation Handler (Button / Spacebar)
   const handleCreateObject = useCallback(() => {
     if (!sceneManagerRef.current) return;
     const hands = latestHandsRef.current;
     if (hands.length === 0) return;
 
-    sceneManagerRef.current.arobjectManager.createObjectAtHand(
+    const newObj = sceneManagerRef.current.arobjectManager.createObjectAtHand(
       activeTool,
       hands[0],
       window.innerWidth,
       window.innerHeight
     );
-    setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
+    if (newObj) {
+      setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
+    }
   }, [activeTool]);
 
   const handleDeleteSelected = useCallback(() => {
@@ -173,17 +161,10 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       const timestamp = performance.now();
 
       let hands: HandLandmarks[] = [];
+      const video = videoRef.current;
 
-      if (isSimulated) {
-        hands = simTrackerRef.current.getSimulatedHands(width, height);
-      } else {
-        const video = videoRef.current;
-        if (video && cameraManagerRef.current.getIsReady()) {
-          hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
-        }
-        if (hands.length === 0 && isSimulated) {
-          hands = simTrackerRef.current.getSimulatedHands(width, height);
-        }
+      if (video && cameraManagerRef.current.getIsReady()) {
+        hands = visionServiceRef.current.detectHands(video, timestamp, width, height);
       }
 
       latestHandsRef.current = hands;
@@ -198,7 +179,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
       isRunning = false;
       clearTimeout(visionTimer);
     };
-  }, [isSimulated]);
+  }, []);
 
   // 4. Smooth 60 FPS Render Loop
   useEffect(() => {
@@ -208,7 +189,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
     const loop = (timestamp: number) => {
       animId = requestAnimationFrame(loop);
-      if (isPaused) return;
 
       const dt = Math.max(0.001, Math.min(0.1, (timestamp - lastTime) / 1000.0));
       lastTime = timestamp;
@@ -233,35 +213,21 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         }
       }
 
-      // Pinch-and-Hold to Create Trigger (Hold pinch for 350ms)
-      let holdProgress = 0.0;
-      if (gestures.isPinching && hands.length > 0 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
-        pinchHoldDurationRef.current += dt;
-        holdProgress = Math.min(1.0, pinchHoldDurationRef.current / 0.35);
-
-        if (pinchHoldDurationRef.current >= 0.35 && !isPinchHoldTriggeredRef.current) {
-          isPinchHoldTriggeredRef.current = true;
-          if (sceneManagerRef.current) {
-            sceneManagerRef.current.arobjectManager.createObjectAtHand(activeTool, hands[0], width, height);
-            setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
-          }
-        }
-      } else {
-        pinchHoldDurationRef.current = 0.0;
-        isPinchHoldTriggeredRef.current = false;
-        holdProgress = 0.0;
-      }
-
-      // Render 3D Perspective Scene
+      // Update 3D Perspective Scene & Handle Pinch Timer
+      let pinchHoldProgress = 0.0;
       if (sceneManagerRef.current) {
-        sceneManagerRef.current.updateAndRender(
+        sceneManagerRef.current.arobjectManager.setActiveTool(activeTool);
+        const res = sceneManagerRef.current.updateAndRender(
           hands,
           gestures,
           activeTool,
-          false,
           dt,
           timestamp / 1000.0
         );
+        pinchHoldProgress = res.pinchHoldProgress;
+        if (res.creationTriggered) {
+          setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
+        }
       }
 
       // Render 2D Technical HUD Overlay
@@ -274,7 +240,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
           activeTool,
           objects,
           selected ? selected.id : null,
-          holdProgress,
+          pinchHoldProgress,
           hudOptionsRef.current,
           perfMetrics.renderFps,
           timestamp / 1000.0
@@ -290,7 +256,7 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isDemo, isPaused, showHUD, isThermalActive, activeTool, perfMetrics.renderFps]);
+  }, [showHUD, isThermalActive, activeTool, perfMetrics.renderFps]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -317,17 +283,6 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
     }
   }, []);
 
-  const handleToggleRecord = useCallback(() => {
-    if (!sceneManagerRef.current || !hudCanvasRef.current) return;
-    if (recorderRef.current.getIsRecording()) {
-      recorderRef.current.stopRecording();
-      setIsRecording(false);
-    } else {
-      recorderRef.current.startRecording(sceneManagerRef.current.getDomElement(), hudCanvasRef.current);
-      setIsRecording(true);
-    }
-  }, []);
-
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -348,74 +303,46 @@ export const MainView: React.FC<MainViewProps> = ({ initialMode, initialUseSimul
         style={{ transform: 'scaleX(-1)' }}
       />
 
-      {isSimulated && (
-        <div className="absolute inset-0 z-0 tech-grid-bg opacity-30 pointer-events-none" />
-      )}
-
       {/* LAYER 1: TRANSPARENT THREE.JS WebGL ON-DEMAND AR CANVAS */}
       <div ref={arContainerRef} className="absolute inset-0 z-10 pointer-events-none" />
 
       {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, MAGENTA FPS) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* Top Status Bar */}
-      <div className="absolute top-4 right-4 z-30 flex items-center space-x-2 pointer-events-none">
-        <div className="px-3 py-1 bg-black/60 backdrop-blur-md border border-cyan-500/40 rounded text-cyan-400 font-mono text-xs tracking-wider flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-bold">HANDFLUX</span>
-          <span className="text-white/40">|</span>
-          <span className="text-white/70">ON-DEMAND AR</span>
-          <span className="text-white/40">|</span>
-          <span className="text-pink-400 font-bold">{objectCount} ACTIVE</span>
-        </div>
-      </div>
-
+      {/* COMPACT ARCHITECTURE DEBUG PANEL (TOP-RIGHT) */}
       {showDebug && (
-        <DebugHUD
-          performance={perfMetrics}
-          state={activeTool}
-          gestures={gestureMetrics}
-          handCount={latestHandsRef.current.length}
-          isSimulated={isSimulated}
-          isDemo={isDemo}
-          demoTimeSec={demoTime}
-        />
+        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-cyan-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[210px]">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-cyan-400">
+            <span>CORE PIPELINE</span>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          </div>
+          <div className="flex justify-between"><span className="text-white/60">CAMERA:</span> <span className={cameraStatus === 'ACTIVE' ? 'text-green-400 font-bold' : 'text-yellow-400'}>{cameraStatus}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">VIDEO:</span> <span>{videoDimensions}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">HANDS:</span> <span className="text-pink-400 font-bold">{latestHandsRef.current.length}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">VISION FPS:</span> <span>{perfMetrics.visionFps}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">RENDER FPS:</span> <span>{perfMetrics.renderFps}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-cyan-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
+          <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
+          <div className="flex justify-between"><span className="text-white/60">WEBGL:</span> <span className="text-emerald-400">OK (TRANSPARENT)</span></div>
+          <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle panel</div>
+        </div>
       )}
 
-      {/* LAYER 3: TOOLBAR WITH SEGMENTED OBJECT TOOLS, THERMAL TOGGLE & CREATE/DELETE */}
+      {/* LAYER 3: TOOLBAR WITH OBJECT TOOLS, THERMAL TOGGLE & CREATE/DELETE */}
       <ControlBar
         activeTool={activeTool}
         isThermalActive={isThermalActive}
-        isDemo={isDemo}
-        demoTime={demoTime}
-        isPaused={isPaused}
-        isRecording={isRecording}
         showHUD={showHUD}
-        isSimulated={isSimulated}
         objectCount={objectCount}
         onSelectTool={setActiveTool}
         onToggleThermal={handleToggleThermal}
         onCreateObject={handleCreateObject}
         onDeleteSelected={handleDeleteSelected}
         onClearAll={handleClearAll}
-        onToggleDemo={() => setIsDemo(p => !p)}
-        onTogglePause={() => setIsPaused(p => !p)}
         onCapture={handleCapture}
-        onToggleRecord={handleToggleRecord}
         onToggleHUD={() => setShowHUD(p => !p)}
         onToggleFullscreen={handleToggleFullscreen}
       />
-
-      {errorMessage && (
-        <ErrorModal
-          message={errorMessage}
-          onFallbackToSimulation={() => {
-            setIsSimulated(true);
-            setErrorMessage(null);
-          }}
-          onDismiss={() => setErrorMessage(null)}
-        />
-      )}
     </div>
   );
 };

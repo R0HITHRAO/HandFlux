@@ -13,6 +13,10 @@ export class ARObjectManager {
   private sceneGroup: THREE.Group;
   private maxObjects: number = 5;
 
+  // Edge-triggered pinch creation lock
+  private isPinchCreationLocked: boolean = false;
+  private pinchTimer: number = 0;
+
   constructor(sceneGroup: THREE.Group) {
     this.sceneGroup = sceneGroup;
   }
@@ -37,56 +41,63 @@ export class ARObjectManager {
     this.selectedObjectId = id;
   }
 
+  /**
+   * Calculates a face-safe spawn location beside the hand (never covering the face)
+   */
   public calculateSpawnPosition(
     hand: HandLandmarks,
     screenWidth: number,
     screenHeight: number
   ): { worldPos: THREE.Vector3; screenPos: { x: number; y: number } } {
     const tip = hand.indexTip;
-    const wrist = hand.wrist;
 
-    let dirX = tip.screenX - wrist.screenX;
-    let dirY = tip.screenY - wrist.screenY;
-    const len = Math.hypot(dirX, dirY) || 1;
-    dirX /= len;
-    dirY /= len;
+    // Determine if hand is on left or right half of screen
+    const isLeftHalf = tip.screenX <= screenWidth * 0.5;
 
-    const faceCenterX = screenWidth * 0.5;
-    const faceCenterY = screenHeight * 0.35;
+    // Offset outward toward screen edge (away from face)
+    const offsetX = isLeftHalf ? -110 : 110;
+    // Offset slightly downward (away from upper face)
+    const offsetY = 30;
 
-    let awayFromFaceX = tip.screenX - faceCenterX;
-    let awayFromFaceY = tip.screenY - faceCenterY;
-    const faceDist = Math.hypot(awayFromFaceX, awayFromFaceY) || 1;
-    awayFromFaceX /= faceDist;
-    awayFromFaceY /= faceDist;
+    let spawnX = tip.screenX + offsetX;
+    let spawnY = tip.screenY + offsetY;
 
-    let offsetDirX = dirX * 0.6 + awayFromFaceX * 0.4;
-    let offsetDirY = dirY * 0.6 + awayFromFaceY * 0.4;
-    const offsetLen = Math.hypot(offsetDirX, offsetDirY) || 1;
-    offsetDirX /= offsetLen;
-    offsetDirY /= offsetLen;
+    // Screen bounds clamp
+    spawnX = Math.max(screenWidth * 0.1, Math.min(screenWidth * 0.9, spawnX));
+    spawnY = Math.max(screenHeight * 0.15, Math.min(screenHeight * 0.85, spawnY));
 
-    const offsetDistance = Math.min(180, Math.max(100, screenWidth * 0.1));
+    // Face Avoidance: Face center is roughly (0.5 * w, 0.32 * h)
+    const faceNormX = 0.5;
+    const faceNormY = 0.32;
+    const spawnNormX = spawnX / screenWidth;
+    const spawnNormY = spawnY / screenHeight;
+    const distToFace = Math.hypot(spawnNormX - faceNormX, spawnNormY - faceNormY);
 
-    let spawnScreenX = tip.screenX + offsetDirX * offsetDistance;
-    let spawnScreenY = tip.screenY + offsetDirY * offsetDistance;
+    if (distToFace < 0.24) {
+      // Push further outward away from center face
+      spawnX = isLeftHalf ? Math.max(screenWidth * 0.08, spawnX - 90) : Math.min(screenWidth * 0.92, spawnX + 90);
+    }
 
-    spawnScreenX = Math.max(screenWidth * 0.08, Math.min(screenWidth * 0.92, spawnScreenX));
-    spawnScreenY = Math.max(screenHeight * 0.08, Math.min(screenHeight * 0.92, spawnScreenY));
-
-    const world = screenToThreeWorld(spawnScreenX, spawnScreenY, screenWidth, screenHeight);
+    const world = screenToThreeWorld(spawnX, spawnY, screenWidth, screenHeight);
     return {
       worldPos: new THREE.Vector3(world.x, world.y, world.z),
-      screenPos: { x: spawnScreenX, y: spawnScreenY }
+      screenPos: { x: spawnX, y: spawnY }
     };
   }
 
+  /**
+   * Spawns exactly ONE object on explicit command
+   */
   public createObjectAtHand(
     type: VisualEffectState,
     hand: HandLandmarks,
     screenWidth: number,
     screenHeight: number
-  ): ARObjectInstance {
+  ): ARObjectInstance | null {
+    if (type === VisualEffectState.NONE || type === VisualEffectState.THERMAL || type === VisualEffectState.RAW_CAMERA) {
+      return null;
+    }
+
     if (this.objects.length >= this.maxObjects) {
       this.deleteObject(this.objects[0].id);
     }
@@ -96,9 +107,9 @@ export class ARObjectManager {
 
     const group = new THREE.Group();
     group.position.copy(worldPos);
-    group.scale.set(0.05, 0.05, 0.05);
+    group.scale.set(0.1, 0.1, 0.1); // Starts at 0.1, animates to 1.0
 
-    this.buildGeometryForType(type, group);
+    this.buildCompactGeometry(type, group);
     this.sceneGroup.add(group);
 
     const newObj: ARObjectInstance = {
@@ -107,16 +118,12 @@ export class ARObjectManager {
       createdAt: performance.now(),
       state: 'SPAWNING',
       position: worldPos.clone(),
-      targetPosition: worldPos.clone(),
       rotation: new THREE.Euler(0, 0, 0),
-      targetRotation: new THREE.Euler(0, 0, 0),
       scale: new THREE.Vector3(1, 1, 1),
-      targetScale: new THREE.Vector3(1, 1, 1),
       opacity: 1.0,
       group,
-      anchorHandId: hand.id,
-      grabOffset: new THREE.Vector3(0, 0, 0),
-      spawnProgress: 0.0
+      spawnProgress: 0.0,
+      boundingRadius: 0.55
     };
 
     this.objects.push(newObj);
@@ -124,9 +131,13 @@ export class ARObjectManager {
     return newObj;
   }
 
-  private buildGeometryForType(type: VisualEffectState, group: THREE.Group): void {
+  /**
+   * Compact, moderate geometry sizing (10-20% of viewport, NOT giant)
+   */
+  private buildCompactGeometry(type: VisualEffectState, group: THREE.Group): void {
     if (type === VisualEffectState.PURPLE_PRISM) {
-      const geo = new THREE.CylinderGeometry(1.2, 1.6, 2.2, 6, 1, false);
+      // 1. Lavender Crystal Prism (Radius 0.38, Height 0.75)
+      const geo = new THREE.CylinderGeometry(0.32, 0.44, 0.75, 6, 1, false);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xc084fc,
         emissive: 0x9333ea,
@@ -138,10 +149,10 @@ export class ARObjectManager {
         side: THREE.DoubleSide
       });
       const mesh = new THREE.Mesh(geo, mat);
-      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 3, transparent: true, opacity: 0.95 }));
+      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2.5, transparent: true, opacity: 0.95 }));
       mesh.add(wire);
 
-      const innerGeo = new THREE.OctahedronGeometry(0.8, 0);
+      const innerGeo = new THREE.OctahedronGeometry(0.24, 0);
       const innerMat = new THREE.MeshStandardMaterial({
         color: 0xf472b6,
         emissive: 0xdb2777,
@@ -156,7 +167,8 @@ export class ARObjectManager {
       group.add(innerMesh);
 
     } else if (type === VisualEffectState.TRIANGLE_EFFECT) {
-      const wedgeGeo = new THREE.ConeGeometry(0.9, 2.0, 3);
+      // 2. Crystal Wedges (Compact cluster)
+      const wedgeGeo = new THREE.ConeGeometry(0.25, 0.65, 3);
       const colors = [0x9333ea, 0xd946ef, 0xec4899];
       for (let i = 0; i < 3; i++) {
         const mat = new THREE.MeshStandardMaterial({
@@ -169,14 +181,15 @@ export class ARObjectManager {
           side: THREE.DoubleSide
         });
         const m = new THREE.Mesh(wedgeGeo, mat);
-        m.position.set((i - 1) * 0.85, (i % 2 === 0 ? 0.2 : -0.2), 0);
-        m.rotation.z = (i - 1) * 0.3;
-        m.add(new THREE.LineSegments(new THREE.EdgesGeometry(wedgeGeo), new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2.5 })));
+        m.position.set((i - 1) * 0.32, (i % 2 === 0 ? 0.08 : -0.08), 0);
+        m.rotation.z = (i - 1) * 0.25;
+        m.add(new THREE.LineSegments(new THREE.EdgesGeometry(wedgeGeo), new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2 })));
         group.add(m);
       }
 
     } else if (type === VisualEffectState.GLOW_BLOCKS) {
-      const cubeGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+      // 3. Compact Glowing Cuboids
+      const cubeGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
       const cubeMat = new THREE.MeshStandardMaterial({
         color: 0xff007f,
         emissive: 0xff007f,
@@ -186,11 +199,11 @@ export class ARObjectManager {
         opacity: 0.9
       });
       const cube = new THREE.Mesh(cubeGeo, cubeMat);
-      cube.position.set(-0.6, 0.2, 0);
-      cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2.5 })));
+      cube.position.set(-0.25, 0.08, 0);
+      cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cubeGeo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })));
       group.add(cube);
 
-      const cuboidGeo = new THREE.BoxGeometry(0.7, 1.4, 0.7);
+      const cuboidGeo = new THREE.BoxGeometry(0.28, 0.55, 0.28);
       const cuboidMat = new THREE.MeshStandardMaterial({
         color: 0x00ff88,
         emissive: 0x00ff88,
@@ -200,14 +213,15 @@ export class ARObjectManager {
         opacity: 0.9
       });
       const cuboid = new THREE.Mesh(cuboidGeo, cuboidMat);
-      cuboid.position.set(0.6, -0.1, 0);
-      cuboid.add(new THREE.LineSegments(new THREE.EdgesGeometry(cuboidGeo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2.5 })));
+      cuboid.position.set(0.25, -0.05, 0);
+      cuboid.add(new THREE.LineSegments(new THREE.EdgesGeometry(cuboidGeo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })));
       group.add(cuboid);
 
     } else if (type === VisualEffectState.LARGE_GEOMETRY) {
+      // 4. Folded Architectural 3D Structure (Controlled initial size)
       const palette = [0x9333ea, 0x00f5ff, 0x22c55e, 0xfacc15, 0xf97316, 0xec4899];
       palette.forEach((col, i) => {
-        const geo = new THREE.BoxGeometry(0.9, 0.5, 0.3);
+        const geo = new THREE.BoxGeometry(0.35, 0.22, 0.14);
         const mat = new THREE.MeshStandardMaterial({
           color: col,
           emissive: col,
@@ -216,15 +230,16 @@ export class ARObjectManager {
           opacity: 0.9
         });
         const m = new THREE.Mesh(geo, mat);
-        m.position.set((i - 2.5) * 0.6, Math.sin(i * 1.2) * 0.35, Math.cos(i * 1.5) * 0.2);
-        m.rotation.set(i * 0.3, i * 0.4, i * 0.2);
+        m.position.set((i - 2.5) * 0.24, Math.sin(i * 1.2) * 0.15, Math.cos(i * 1.5) * 0.08);
+        m.rotation.set(i * 0.25, i * 0.35, i * 0.15);
         m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })));
         group.add(m);
       });
 
     } else {
+      // 5. HATCH / DOTS Plane (0.9 x 0.55)
       const isDots = type === VisualEffectState.RECTANGLE_DOTS;
-      const planeGeo = new THREE.PlaneGeometry(2.4, 1.3, 4, 4);
+      const planeGeo = new THREE.PlaneGeometry(0.9, 0.55, 4, 4);
       const shaderMat = new THREE.ShaderMaterial({
         uniforms: {
           uTime: { value: 0.0 },
@@ -240,11 +255,14 @@ export class ARObjectManager {
         side: THREE.DoubleSide
       });
       const plane = new THREE.Mesh(planeGeo, shaderMat);
-      plane.add(new THREE.LineSegments(new THREE.EdgesGeometry(planeGeo), new THREE.LineBasicMaterial({ color: isDots ? 0xff007f : 0x00f5ff, linewidth: 2.5 })));
+      plane.add(new THREE.LineSegments(new THREE.EdgesGeometry(planeGeo), new THREE.LineBasicMaterial({ color: isDots ? 0xff007f : 0x00f5ff, linewidth: 2 })));
       group.add(plane);
     }
   }
 
+  /**
+   * Update existing objects, handle grab/manipulation, and advance pinch timer
+   */
   public update(
     hands: HandLandmarks[],
     gestures: GestureMetrics,
@@ -252,64 +270,87 @@ export class ARObjectManager {
     screenHeight: number,
     dt: number,
     time: number
-  ): void {
+  ): { creationTriggered: boolean; pinchHoldProgress: number } {
+    let creationTriggered = false;
+    let pinchHoldProgress = 0.0;
+
+    // 1. Edge-Triggered Pinch Creation Logic
+    if (gestures.isPinching && hands.length > 0) {
+      if (!this.isPinchCreationLocked) {
+        this.pinchTimer += dt;
+        pinchHoldProgress = Math.min(1.0, this.pinchTimer / 0.4);
+
+        if (this.pinchTimer >= 0.4) {
+          // Trigger exactly 1 object creation
+          creationTriggered = true;
+          this.isPinchCreationLocked = true; // Lock until release!
+          this.pinchTimer = 0.0;
+          this.createObjectAtHand(this.activeTool, hands[0], screenWidth, screenHeight);
+        }
+      }
+    } else {
+      // Reset pinch timer and unlock when pinch is released
+      this.pinchTimer = 0.0;
+      this.isPinchCreationLocked = false;
+      pinchHoldProgress = 0.0;
+    }
+
+    // 2. Animate and Manipulate Existing Objects
     this.objects.forEach(obj => {
+      // Spawn Animation: 0.1 -> 1.0 scale over 350ms
       if (obj.spawnProgress < 1.0) {
-        obj.spawnProgress = Math.min(1.0, obj.spawnProgress + dt * 3.5);
-        const s = THREE.MathUtils.lerp(0.05, 1.0, Math.sin(obj.spawnProgress * Math.PI * 0.5));
+        obj.spawnProgress = Math.min(1.0, obj.spawnProgress + dt * 3.0);
+        const s = THREE.MathUtils.lerp(0.1, 1.0, Math.sin(obj.spawnProgress * Math.PI * 0.5));
         obj.group.scale.set(s * obj.scale.x, s * obj.scale.y, s * obj.scale.z);
         if (obj.spawnProgress >= 1.0 && obj.state === 'SPAWNING') {
-          obj.state = 'ACTIVE';
+          obj.state = 'UNSELECTED';
         }
       }
 
-      let isHandNear = false;
-      let controllingHand: HandLandmarks | null = null;
+      // Check if user is grabbing this object with a pinch near it
+      let isHandGrabbingThis = false;
+      let grabbingHand: HandLandmarks | null = null;
 
-      for (const h of hands) {
-        const w = screenToThreeWorld(h.indexTip.screenX, h.indexTip.screenY, screenWidth, screenHeight);
-        const handPos = new THREE.Vector3(w.x, w.y, w.z);
-        const dist = handPos.distanceTo(obj.position);
-        if (dist < 1.4) {
-          isHandNear = true;
-          controllingHand = h;
-          break;
+      if (gestures.isPinching) {
+        for (const h of hands) {
+          const w = screenToThreeWorld(h.indexTip.screenX, h.indexTip.screenY, screenWidth, screenHeight);
+          const handPos = new THREE.Vector3(w.x, w.y, w.z);
+          const dist = handPos.distanceTo(obj.position);
+
+          if (dist < 0.8) {
+            isHandGrabbingThis = true;
+            grabbingHand = h;
+            break;
+          }
         }
       }
 
-      if (isHandNear && gestures.isPinching && controllingHand) {
+      if (isHandGrabbingThis && grabbingHand) {
         obj.state = 'GRABBED';
         this.selectedObjectId = obj.id;
-        const tipWorld = screenToThreeWorld(
-          controllingHand.indexTip.screenX,
-          controllingHand.indexTip.screenY,
-          screenWidth,
-          screenHeight
-        );
-        obj.targetPosition.set(tipWorld.x, tipWorld.y + 0.35, tipWorld.z);
+        const w = screenToThreeWorld(grabbingHand.indexTip.screenX, grabbingHand.indexTip.screenY, screenWidth, screenHeight);
+        obj.position.set(w.x, w.y, w.z);
 
         if (hands.length >= 2) {
-          const targetScaleScalar = Math.max(0.6, Math.min(2.5, gestures.twoHandDistance * 2.2));
-          obj.targetScale.set(targetScaleScalar, targetScaleScalar, targetScaleScalar);
-          obj.targetRotation.z = gestures.twoHandAngle;
+          const targetScale = Math.max(0.5, Math.min(2.0, gestures.twoHandDistance * 2.0));
+          obj.scale.setScalar(targetScale);
+          obj.rotation.z = gestures.twoHandAngle;
         }
       } else if (obj.state === 'GRABBED' && !gestures.isPinching) {
-        obj.state = 'RELEASED';
+        obj.state = 'UNSELECTED'; // Stays in place where released!
       }
 
-      obj.position.lerp(obj.targetPosition, 0.2);
-      obj.rotation.z = lerp(obj.rotation.z, obj.targetRotation.z, 0.2);
+      // Apply transform
       obj.group.position.copy(obj.position);
       obj.group.rotation.copy(obj.rotation);
-
       if (obj.spawnProgress >= 1.0) {
-        obj.scale.lerp(obj.targetScale, 0.2);
         obj.group.scale.copy(obj.scale);
       }
 
-      obj.group.rotation.y = time * 0.6;
-      obj.group.rotation.x = Math.sin(time * 0.7 + obj.createdAt) * 0.15;
+      // Gentle subtle rotation animation
+      obj.group.rotation.y = time * 0.5;
 
+      // Update shader uniforms
       obj.group.traverse(child => {
         if ((child as THREE.Mesh).isMesh) {
           const mat = (child as THREE.Mesh).material;
@@ -319,6 +360,8 @@ export class ARObjectManager {
         }
       });
     });
+
+    return { creationTriggered, pinchHoldProgress };
   }
 
   public deleteObject(id: string): void {

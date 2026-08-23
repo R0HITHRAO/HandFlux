@@ -114,18 +114,7 @@ export class TechnicalHUDCanvas {
 
     // 3. HAND TRACKING OVERLAYS (EXACT REFERENCE)
     if (hands.length === 0) {
-      ctx.save();
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(cx - 90, cy - 65, 180, 130);
-      ctx.font = '12px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#00ff00';
-      ctx.textAlign = 'center';
-      ctx.fillText('[ POSITION HAND TO CREATE AR OBJECTS ]', cx, cy + 85);
-      ctx.restore();
-      return;
+      return; // Do not show any confusing center box
     }
 
     const fingerChains = [
@@ -223,15 +212,15 @@ export class TechnicalHUDCanvas {
           const midY = (thumbTip.screenY + indexTip.screenY) * 0.5;
 
           ctx.beginPath();
-          ctx.arc(midX, midY, 28, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * creationHoldProgress);
+          ctx.arc(midX, midY, 26, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * creationHoldProgress);
           ctx.strokeStyle = '#00f5ff';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 3.5;
           ctx.stroke();
 
           ctx.font = 'bold 11px "JetBrains Mono", monospace';
           ctx.fillStyle = '#00f5ff';
           ctx.textAlign = 'center';
-          ctx.fillText('CREATING ' + (EFFECT_CONFIGS[activeTool]?.name || 'OBJ') + '...', midX, midY - 35);
+          ctx.fillText('HOLD TO CREATE ' + (EFFECT_CONFIGS[activeTool]?.name || 'OBJ'), midX, midY - 32);
         }
         ctx.restore();
       }
@@ -274,12 +263,12 @@ export class TechnicalHUDCanvas {
       ctx.shadowColor = isSelected ? '#ff00dc' : '#00f5ff';
       ctx.shadowBlur = isSelected ? 12 : 6;
 
-      const sz = 38;
+      const sz = 24;
       ctx.strokeRect(screenX - sz, screenY - sz, sz * 2, sz * 2);
 
       ctx.font = '10px "JetBrains Mono", monospace';
       ctx.fillStyle = isSelected ? '#ff00dc' : '#00f5ff';
-      ctx.fillText('[' + (EFFECT_CONFIGS[obj.type]?.name || 'OBJ') + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
+      ctx.fillText('[' + (EFFECT_CONFIGS[obj.type]?.name || 'OBJ') + ']', screenX - sz, screenY - sz - 6);
       ctx.restore();
     });
   }

@@ -22,6 +22,7 @@ export class SceneManager {
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
 
+    // 100% Transparent WebGL Canvas
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setSize(this.width, this.height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -44,27 +45,28 @@ export class SceneManager {
     this.camera3D.position.set(0, 0, 5);
     this.camera3D.lookAt(0, 0, 0);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.5);
     this.scene3D.add(ambientLight);
     
-    const magentaLight = new THREE.DirectionalLight(0xff00ff, 4.5);
+    const magentaLight = new THREE.DirectionalLight(0xff00ff, 4.0);
     magentaLight.position.set(5, 5, 5);
     this.scene3D.add(magentaLight);
 
-    const cyanLight = new THREE.DirectionalLight(0x00f5ff, 4.5);
+    const cyanLight = new THREE.DirectionalLight(0x00f5ff, 4.0);
     cyanLight.position.set(-5, -5, 5);
     this.scene3D.add(cyanLight);
 
-    const goldLight = new THREE.DirectionalLight(0xfacc15, 3.5);
+    const goldLight = new THREE.DirectionalLight(0xfacc15, 3.0);
     goldLight.position.set(0, 5, -2);
     this.scene3D.add(goldLight);
 
     this.objectsGroup = new THREE.Group();
     this.scene3D.add(this.objectsGroup);
 
+    // Ghost Preview marker (small subtle ring at spawn location)
     this.ghostPreviewGroup = new THREE.Group();
-    const ghostGeo = new THREE.RingGeometry(0.25, 0.3, 32);
-    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const ghostGeo = new THREE.RingGeometry(0.12, 0.15, 24);
+    const ghostMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
     const ghostMesh = new THREE.Mesh(ghostGeo, ghostMat);
     this.ghostPreviewGroup.add(ghostMesh);
     this.ghostPreviewGroup.visible = false;
@@ -77,16 +79,10 @@ export class SceneManager {
     hands: HandLandmarks[],
     gestures: GestureMetrics,
     activeTool: VisualEffectState,
-    isRawCamera: boolean,
     dt: number,
     time: number
-  ): void {
-    if (isRawCamera) {
-      this.renderer.clear();
-      return;
-    }
-
-    this.arobjectManager.update(hands, gestures, this.width, this.height, dt, time);
+  ): { creationTriggered: boolean; pinchHoldProgress: number } {
+    const result = this.arobjectManager.update(hands, gestures, this.width, this.height, dt, time);
 
     if (hands.length > 0 && activeTool !== VisualEffectState.NONE && activeTool !== VisualEffectState.THERMAL) {
       this.ghostPreviewGroup.visible = true;
@@ -98,6 +94,7 @@ export class SceneManager {
     }
 
     this.renderer.render(this.scene3D, this.camera3D);
+    return result;
   }
 
   public resize(width: number, height: number): void {

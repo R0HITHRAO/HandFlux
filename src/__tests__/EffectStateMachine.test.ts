@@ -31,8 +31,11 @@ describe('ARObjectManager On-Demand System', () => {
     const mgr = new ARObjectManager(group);
     const obj = mgr.createObjectAtHand(VisualEffectState.PURPLE_PRISM, dummyHand, 1280, 720);
     expect(mgr.getObjects().length).toBe(1);
-    expect(obj.type).toBe(VisualEffectState.PURPLE_PRISM);
-    expect(obj.state).toBe('SPAWNING');
+    expect(obj).not.toBeNull();
+    if (obj) {
+      expect(obj.type).toBe(VisualEffectState.PURPLE_PRISM);
+      expect(obj.state).toBe('SPAWNING');
+    }
   });
 
   it('supports deletion and clear all', () => {

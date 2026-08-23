@@ -1,26 +1,18 @@
 import React from 'react';
 import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
-import { PlusCircle, Trash2, RotateCcw, Camera, Play, Pause, Eye, EyeOff, Maximize2 } from 'lucide-react';
+import { PlusCircle, Trash2, RotateCcw, Eye, EyeOff, Maximize2 } from 'lucide-react';
 
 interface ControlBarProps {
   activeTool: VisualEffectState;
   isThermalActive: boolean;
-  isDemo: boolean;
-  demoTime: number;
-  isPaused: boolean;
-  isRecording: boolean;
   showHUD: boolean;
-  isSimulated: boolean;
   objectCount: number;
   onSelectTool: (tool: VisualEffectState) => void;
   onToggleThermal: () => void;
   onCreateObject: () => void;
   onDeleteSelected: () => void;
   onClearAll: () => void;
-  onToggleDemo: () => void;
-  onTogglePause: () => void;
   onCapture: () => void;
-  onToggleRecord: () => void;
   onToggleHUD: () => void;
   onToggleFullscreen: () => void;
 }
@@ -28,10 +20,6 @@ interface ControlBarProps {
 export const ControlBar: React.FC<ControlBarProps> = ({
   activeTool,
   isThermalActive,
-  isDemo,
-  demoTime,
-  isPaused,
-  isRecording,
   showHUD,
   objectCount,
   onSelectTool,
@@ -39,10 +27,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onCreateObject,
   onDeleteSelected,
   onClearAll,
-  onToggleDemo,
-  onTogglePause,
   onCapture,
-  onToggleRecord,
   onToggleHUD,
   onToggleFullscreen,
 }) => {
@@ -63,26 +48,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <span className="text-white/60">SELECTED TOOL:</span>
         <span className="text-cyan-400 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span>
         <span className="text-white/40">|</span>
-        <span className="text-pink-400">PINCH & HOLD HAND OR CLICK [ ✚ CREATE ]</span>
+        <span className="text-pink-400">PINCH & HOLD HAND (400ms) OR CLICK [ ✚ CREATE ]</span>
       </div>
 
       {/* Main Tool Bar */}
       <div className="flex items-center space-x-1.5 p-1.5 bg-black/85 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl overflow-x-auto">
-        {/* Mode Toggle */}
-        <button
-          onClick={onToggleDemo}
-          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all duration-150 flex items-center space-x-1 ${
-            isDemo
-              ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30'
-              : 'bg-white/10 text-white/80 hover:bg-white/20'
-          }`}
-        >
-          <Camera className="w-3.5 h-3.5" />
-          <span>{isDemo ? `DEMO (${demoTime.toFixed(1)}s)` : 'LIVE MODE'}</span>
-        </button>
-
-        <div className="w-[1px] h-5 bg-white/20" />
-
         {/* 6 AR Object Tools */}
         {objectTools.map(tool => {
           const isSelected = activeTool === tool.state;
@@ -163,29 +133,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         </button>
 
         <button
-          onClick={onToggleRecord}
-          className={`px-2.5 py-1 text-[11px] font-mono rounded flex items-center space-x-1.5 ${
-            isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-white/80 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-white' : 'bg-red-500'}`} />
-          <span>{isRecording ? 'STOP' : 'RECORD'}</span>
-        </button>
-
-        <button
           onClick={onToggleHUD}
           className="p-1 text-white/70 hover:text-white hover:bg-white/10 rounded"
           title="Toggle HUD (H)"
         >
           {showHUD ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-red-400" />}
-        </button>
-
-        <button
-          onClick={onTogglePause}
-          className="p-1 text-white/70 hover:text-white hover:bg-white/10 rounded"
-          title="Pause / Resume (P)"
-        >
-          {isPaused ? <Play className="w-3.5 h-3.5 text-green-400" /> : <Pause className="w-3.5 h-3.5" />}
         </button>
 
         <button
