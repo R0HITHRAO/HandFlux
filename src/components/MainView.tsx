@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SceneManager } from '../rendering/SceneManager';
-import { TechnicalHUDCanvas, HUDOptions } from '../overlays/TechnicalHUDCanvas';
+import { TechnicalHUDCanvas } from '../overlays/TechnicalHUDCanvas';
 import { HandLandmarkerService } from '../vision/HandLandmarkerService';
 import { GestureEngine } from '../vision/GestureEngine';
 import { CameraManager } from '../camera/CameraManager';
@@ -19,6 +19,7 @@ import { CalibrationModal } from '../calibration/CalibrationModal';
 import { SettingsModal } from '../settings/SettingsModal';
 import { RecruiterDemoTour } from './RecruiterDemoTour';
 import { captureCanvasScreenshot } from '../utils/recording';
+import { screenToThreeWorld } from '../utils/mathUtils';
 import * as THREE from 'three';
 
 export const MainView: React.FC = () => {
@@ -34,10 +35,10 @@ export const MainView: React.FC = () => {
   const gestureEngineRef = useRef<GestureEngine>(new GestureEngine());
   const presentationRef = useRef<PresentationController>(new PresentationController());
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
-  // Application States
   const [activeMode, setActiveMode] = useState<AppMode>('PRESENTATION');
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
@@ -46,11 +47,9 @@ export const MainView: React.FC = () => {
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
-  // Presentation Mode Slide State
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [activeAtom, setActiveAtom] = useState<AtomData | null>(null);
 
-  // Modals
   const [isCalibrationOpen, setIsCalibrationOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isTourActive, setIsTourActive] = useState<boolean>(false);
@@ -96,7 +95,7 @@ export const MainView: React.FC = () => {
 
     const mol = new MolecularScene();
     molecularSceneRef.current = mol;
-    scene.arobjectManager['sceneGroup'].add(mol.group);
+    scene.arobjectManager.sceneGroup.add(mol.group);
     mol.group.visible = false;
 
     const hud = new TechnicalHUDCanvas(hudCanvasRef.current);
@@ -147,7 +146,7 @@ export const MainView: React.FC = () => {
     }
   }, []);
 
-  // 3. Gesture Event Subscriptions
+  // 3. Gesture Subscriptions for Swipes
   useEffect(() => {
     const unsub = gestureEngineRef.current.addEventListener((event) => {
       if (activeMode === 'PRESENTATION') {
@@ -217,23 +216,32 @@ export const MainView: React.FC = () => {
       const height = window.innerHeight;
       const hands = latestHandsRef.current;
 
-      // Stage 1: Gesture Engine Processing
+      // Stage 1: Gesture Processing
       const updateStart = performance.now();
       const gestures = gestureEngineRef.current.processHands(hands, width, height, timestamp);
 
-      // 3D Molecule Manipulation (Grab, Rotate, Scale)
-      if (activeMode === 'VIEWER_3D' && molecularSceneRef.current) {
+      // 3D Molecule Manipulation & Raycasting
+      if (activeMode === 'VIEWER_3D' && molecularSceneRef.current && sceneManagerRef.current) {
         const mol = molecularSceneRef.current.group;
+        molecularSceneRef.current.updateOrbitals(timestamp * 0.001);
+
+        // Raycast atoms on pointer
+        const normX = (gestures.pointerPosition.screenX / width) * 2 - 1;
+        const normY = -(gestures.pointerPosition.screenY / height) * 2 + 1;
+        raycasterRef.current.setFromCamera(new THREE.Vector2(normX, normY), sceneManagerRef.current['camera3D']);
+        const hitAtom = molecularSceneRef.current.raycastAtom(raycasterRef.current);
+        setActiveAtom(hitAtom);
+
         if (gestures.isPinching && hands.length > 0) {
-          mol.position.x = (gestures.pointerPosition.screenX / width - 0.5) * 6;
-          mol.position.y = (0.5 - gestures.pointerPosition.screenY / height) * 4;
+          const w = screenToThreeWorld(gestures.pointerPosition.screenX, gestures.pointerPosition.screenY, width, height);
+          mol.position.set(w.x, w.y, w.z);
         }
         if (hands.length >= 2) {
           mol.scale.setScalar(Math.max(0.5, Math.min(2.5, gestures.twoHandDistance * 2.2)));
           mol.rotation.z = gestures.twoHandAngle;
         } else if (!gestures.isPinching) {
-          mol.rotation.y += dt * 0.4;
-          mol.rotation.x += dt * 0.2;
+          mol.rotation.y += dt * 0.35;
+          mol.rotation.x += dt * 0.15;
         }
       }
 

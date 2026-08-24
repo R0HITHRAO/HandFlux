@@ -1,5 +1,5 @@
 import React from 'react';
-import { VisualEffectState } from '../types/effects';
+import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { PlusCircle, Trash2, RotateCcw, Eye, EyeOff, Maximize2 } from 'lucide-react';
 
 interface ControlBarProps {
@@ -29,107 +29,67 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   onToggleHUD,
   onToggleFullscreen,
 }) => {
-  const isPrismSelected = activeTool === VisualEffectState.PURPLE_PRISM;
-  const isHatchSelected = activeTool === VisualEffectState.RECTANGLE_TRACKING;
-  const toolName = isHatchSelected ? 'HATCH' : isPrismSelected ? 'PRISM' : 'NONE';
+  const toolConfigs = [
+    { type: VisualEffectState.RECTANGLE_TRACKING, label: '📐 HATCH' },
+    { type: VisualEffectState.PURPLE_PRISM, label: '💎 PRISM' },
+    { type: VisualEffectState.TRIANGLE_EFFECT, label: '🔺 WEDGES' },
+    { type: VisualEffectState.GLOW_BLOCKS, label: '🧊 BLOCKS' },
+    { type: VisualEffectState.RECTANGLE_DOTS, label: '✨ DOTS' },
+    { type: VisualEffectState.LARGE_GEOMETRY, label: '📦 3D FOLD' }
+  ];
+
+  const toolName = EFFECT_CONFIGS[activeTool]?.name || 'NONE';
 
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center space-y-2 pointer-events-auto max-w-[95vw]">
-      {/* Top Status Banner */}
-      <div className="px-3.5 py-1.5 bg-black/90 backdrop-blur-md border border-cyan-500/40 rounded-full text-xs font-mono flex items-center space-x-2.5 shadow-xl">
-        <span className={`w-2 h-2 rounded-full ${toolName !== 'NONE' ? 'bg-cyan-400 animate-pulse' : 'bg-gray-400'}`} />
-        <span className="text-white/70">CURRENT TOOL:</span>
-        <span className="text-cyan-300 font-bold">{toolName}</span>
-        <span className="text-white/40">|</span>
-        <span className="text-pink-400 font-semibold">{toolName !== 'NONE' ? 'PINCH & HOLD (400ms) OR PRESS [ ✚ CREATE ]' : 'CLICK [ HATCH ] OR [ PRISM ] TO SELECT TOOL'}</span>
-      </div>
+      {/* Tool Selector Buttons */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 p-1.5 bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl">
+        {toolConfigs.map(({ type, label }) => {
+          const isSelected = activeTool === type;
+          return (
+            <button
+              key={type}
+              onClick={() => onSelectTool(isSelected ? VisualEffectState.NONE : type)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
+                isSelected
+                  ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/50 scale-105'
+                  : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              <span>{label}</span>
+            </button>
+          );
+        })}
 
-      {/* Main Action Bar */}
-      <div className="flex items-center space-x-2 p-1.5 bg-black/85 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl">
-        {/* HATCH Tool Selector */}
-        <button
-          onClick={() => onSelectTool(isHatchSelected ? VisualEffectState.NONE : VisualEffectState.RECTANGLE_TRACKING)}
-          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all duration-150 flex items-center space-x-1.5 ${
-            isHatchSelected
-              ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/50 scale-105'
-              : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
-          }`}
-          title="Select Hatch Digital Plane (Press 1 or H)"
-        >
-          <span>📐 1: HATCH</span>
-        </button>
+        <div className="w-[1px] h-6 bg-white/20 mx-1" />
 
-        {/* PRISM Tool Selector */}
-        <button
-          onClick={() => onSelectTool(isPrismSelected ? VisualEffectState.NONE : VisualEffectState.PURPLE_PRISM)}
-          className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition-all duration-150 flex items-center space-x-1.5 ${
-            isPrismSelected
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50 scale-105'
-              : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
-          }`}
-          title="Select Prism Crystal (Press 2 or P)"
-        >
-          <span>💎 2: PRISM</span>
-        </button>
-
-        <div className="w-[1px] h-6 bg-white/20" />
-
-        {/* CREATE Button */}
+        {/* Create Button */}
         <button
           onClick={onCreateObject}
-          className="px-3.5 py-2 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 shadow-lg shadow-pink-500/40 active:scale-95 transition-transform"
-          title="Create Shape at Hand Position (Space / Enter / Pinch-Hold)"
+          className="px-3.5 py-1.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-lg shadow-pink-500/40 active:scale-95 transition-transform"
         >
-          <PlusCircle className="w-4 h-4" />
-          <span>CREATE {toolName !== 'NONE' ? toolName : 'OBJECT'}</span>
+          <PlusCircle className="w-3.5 h-3.5" />
+          <span>CREATE {toolName !== 'NONE' ? toolName : ''}</span>
         </button>
 
-        {/* DELETE Button */}
+        {/* Delete Button */}
         <button
           onClick={onDeleteSelected}
           disabled={objectCount === 0}
-          className="px-3 py-2 bg-red-950/50 hover:bg-red-900/80 text-red-300 disabled:opacity-30 disabled:pointer-events-none border border-red-500/30 rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5"
-          title="Delete Selected Object (Delete / Backspace)"
+          className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 disabled:opacity-30 disabled:pointer-events-none border border-red-500/30 rounded-xl text-xs font-mono font-bold flex items-center space-x-1"
         >
           <Trash2 className="w-3.5 h-3.5" />
           <span>DELETE</span>
         </button>
 
-        {/* CLEAR ALL Button */}
+        {/* Clear Button */}
         <button
           onClick={onClearAll}
           disabled={objectCount === 0}
-          className="px-3 py-2 bg-white/5 hover:bg-white/15 text-white/70 disabled:opacity-30 disabled:pointer-events-none rounded-lg text-xs font-mono flex items-center space-x-1.5"
-          title="Clear all objects"
+          className="px-3 py-1.5 bg-white/5 hover:bg-white/15 text-white/70 disabled:opacity-30 disabled:pointer-events-none rounded-xl text-xs font-mono flex items-center space-x-1"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>CLEAR ({objectCount})</span>
-        </button>
-      </div>
-
-      {/* Utilities */}
-      <div className="flex items-center space-x-2 p-1 bg-black/60 backdrop-blur-sm border border-white/10 rounded-md">
-        <button
-          onClick={onCapture}
-          className="px-2.5 py-1 text-[11px] font-mono text-white/80 hover:text-white hover:bg-white/10 rounded"
-        >
-          [ CAPTURE ]
-        </button>
-
-        <button
-          onClick={onToggleHUD}
-          className="p-1 text-white/70 hover:text-white hover:bg-white/10 rounded"
-          title="Toggle HUD (H)"
-        >
-          {showHUD ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-red-400" />}
-        </button>
-
-        <button
-          onClick={onToggleFullscreen}
-          className="p-1 text-white/70 hover:text-white hover:bg-white/10 rounded"
-          title="Fullscreen (F)"
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
