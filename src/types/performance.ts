@@ -1,11 +1,15 @@
 export type QualityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' | 'AUTO';
 
 export interface PerformanceMetrics {
-  renderFps: number;
+  cameraFps: number;
   visionFps: number;
-  visionLatencyMs: number;
-  frameTimeMs: number;
+  renderFps: number;
+  visionTimeMs: number;
+  arUpdateTimeMs: number;
+  renderTimeMs: number;
+  totalFrameTimeMs: number;
   qualityLevel: QualityLevel;
   activeParticles: number;
-  glslPasses: number;
+  dpr: number;
+  renderScale: number;
 }

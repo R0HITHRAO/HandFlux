@@ -2,6 +2,7 @@ import { HandLandmarks } from '../types/vision';
 import { GestureMetrics } from '../types/gestures';
 import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { ARObjectInstance } from '../types/objects';
+import { PerformanceMetrics } from '../types/performance';
 
 export interface HUDOptions {
   showLandmarks: boolean;
@@ -15,7 +16,6 @@ export class TechnicalHUDCanvas {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
 
-  // Pre-allocated chain indices for zero array allocation in loop
   private fingerChains = [
     [0, 1, 2, 3, 4],
     [0, 5, 6, 7, 8],
@@ -40,8 +40,7 @@ export class TechnicalHUDCanvas {
     selectedObjId: string | null,
     creationHoldProgress: number,
     options: HUDOptions,
-    renderFps: number,
-    visionFps: number,
+    metrics: PerformanceMetrics,
     time: number = performance.now() * 0.001
   ): void {
     const ctx = this.ctx;
@@ -53,7 +52,7 @@ export class TechnicalHUDCanvas {
     // 1. TOP-LEFT DUAL FPS & ACTIVE TOOL
     ctx.font = 'bold 20px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ff00dc';
-    ctx.fillText('RENDER: ' + renderFps + ' FPS | VISION: ' + visionFps + ' FPS', 24, 38);
+    ctx.fillText('RENDER: ' + metrics.renderFps + ' FPS | VISION: ' + metrics.visionFps + ' FPS', 24, 38);
 
     ctx.font = '12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
@@ -116,7 +115,7 @@ export class TechnicalHUDCanvas {
     for (let hIdx = 0; hIdx < hands.length; hIdx++) {
       const hand = hands[hIdx];
 
-      // A. Batched Green Skeleton Bones
+      // Green Skeleton Bones
       if (options.showLandmarks) {
         ctx.strokeStyle = 'rgba(0, 255, 0, 0.35)';
         ctx.lineWidth = 6.0;
@@ -138,7 +137,7 @@ export class TechnicalHUDCanvas {
         ctx.stroke();
       }
 
-      // B. Batched Red Landmark Dots
+      // Red Landmark Dots
       if (options.showLandmarks) {
         ctx.beginPath();
         for (let i = 0; i < hand.landmarks.length; i++) {
@@ -153,7 +152,7 @@ export class TechnicalHUDCanvas {
         ctx.stroke();
       }
 
-      // C. Primary Interaction Point on Index Tip
+      // Primary Interaction Point on Index Tip
       const indexTip = hand.indexTip;
       const thumbTip = hand.thumbTip;
 
@@ -169,7 +168,7 @@ export class TechnicalHUDCanvas {
       ctx.arc(indexTip.screenX, indexTip.screenY, ringPulse, 0, 6.2831853);
       ctx.stroke();
 
-      // D. Magenta Pinch Line
+      // Magenta Pinch Line
       const dx = thumbTip.screenX - indexTip.screenX;
       const dy = thumbTip.screenY - indexTip.screenY;
       const isPinchActive = (dx * dx + dy * dy) < 5625;
@@ -205,7 +204,7 @@ export class TechnicalHUDCanvas {
         }
       }
 
-      // E. Hand Label & Coordinates
+      // Hand Label & Coordinates
       ctx.font = 'bold 12px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00ff00';
       ctx.fillText('#' + (hIdx + 1) + ' ' + hand.handedness.toUpperCase(), hand.boundingBox.minX, hand.boundingBox.minY - 10);
