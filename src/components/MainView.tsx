@@ -29,7 +29,6 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
-  // Milestone Initial State: CURRENT TOOL = NONE, OBJECTS = 0
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
@@ -37,7 +36,7 @@ export const MainView: React.FC<MainViewProps> = () => {
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
-  // Low-frequency UI Debug State (5 Hz)
+  // Low-frequency UI Debug State (Updated at 5 Hz to eliminate React re-render overhead)
   const [debugStats, setDebugStats] = useState({
     renderFps: 60,
     visionFps: 30,
@@ -101,7 +100,7 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 2. Discrete Event Handlers (Never inside render loop)
+  // 2. Discrete Event Handlers
   const handleCreateObject = useCallback(() => {
     if (!sceneManagerRef.current) return;
     const hands = latestHandsRef.current;
@@ -131,15 +130,15 @@ export const MainView: React.FC<MainViewProps> = () => {
     setObjectCount(0);
   }, []);
 
-  // 3. Vision Loop (Throttled to 25-30 FPS, Async)
+  // 3. High-Efficiency Vision Loop
   useEffect(() => {
-    let visionTimer: ReturnType<typeof setTimeout>;
     let isRunning = true;
+    let timerId: ReturnType<typeof setTimeout>;
 
     const runVisionStep = () => {
       if (!isRunning) return;
       if (document.hidden) {
-        visionTimer = setTimeout(runVisionStep, 200);
+        timerId = setTimeout(runVisionStep, 200);
         return;
       }
 
@@ -158,13 +157,13 @@ export const MainView: React.FC<MainViewProps> = () => {
       perfMonitorRef.current.recordVisionInference(tEnd - tStart, tEnd);
       latestHandsRef.current = hands;
 
-      visionTimer = setTimeout(runVisionStep, 32);
+      timerId = setTimeout(runVisionStep, 32);
     };
 
     runVisionStep();
     return () => {
       isRunning = false;
-      clearTimeout(visionTimer);
+      clearTimeout(timerId);
     };
   }, []);
 
@@ -202,7 +201,7 @@ export const MainView: React.FC<MainViewProps> = () => {
       animId = requestAnimationFrame(loop);
       perfMonitorRef.current.recordRenderFrame(timestamp);
 
-      const dt = Math.max(0.001, Math.min(0.08, (timestamp - lastTime) / 1000.0));
+      const dt = Math.max(0.001, Math.min(0.08, (timestamp - lastTime) * 0.001));
       lastTime = timestamp;
 
       const width = window.innerWidth;
@@ -220,7 +219,7 @@ export const MainView: React.FC<MainViewProps> = () => {
           gestures,
           activeTool,
           dt,
-          timestamp / 1000.0,
+          timestamp * 0.001,
           renderScale
         );
         pinchHoldProgress = res.pinchHoldProgress;
@@ -244,7 +243,7 @@ export const MainView: React.FC<MainViewProps> = () => {
           hudOptionsRef.current,
           metrics.renderFps,
           metrics.visionFps,
-          timestamp / 1000.0
+          timestamp * 0.001
         );
       } else if (hudRef.current && !showHUD) {
         const ctx = hudCanvasRef.current?.getContext('2d');
@@ -275,7 +274,7 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const handleCapture = useCallback(() => {
     if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-hatch.png');
+      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-efficient.png');
     }
   }, []);
 
@@ -305,7 +304,7 @@ export const MainView: React.FC<MainViewProps> = () => {
       {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, DUAL FPS) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* MILESTONE DEBUG PANEL (TOP-RIGHT) */}
+      {/* HIGH-PERFORMANCE ARCHITECTURE DEBUG PANEL (TOP-RIGHT) */}
       {showDebug && (
         <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-cyan-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[220px]">
           <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-cyan-400">

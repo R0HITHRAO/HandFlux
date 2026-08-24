@@ -15,9 +15,19 @@ export class TechnicalHUDCanvas {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
 
+  // Pre-allocated chain indices for zero array allocation in loop
+  private fingerChains = [
+    [0, 1, 2, 3, 4],
+    [0, 5, 6, 7, 8],
+    [0, 9, 10, 11, 12],
+    [0, 13, 14, 15, 16],
+    [0, 17, 18, 19, 20],
+    [5, 9, 13, 17, 0]
+  ];
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: true });
     if (!context) throw new Error('2D Context unavailable');
     this.ctx = context;
   }
@@ -32,7 +42,7 @@ export class TechnicalHUDCanvas {
     options: HUDOptions,
     renderFps: number,
     visionFps: number,
-    time: number = performance.now() / 1000
+    time: number = performance.now() * 0.001
   ): void {
     const ctx = this.ctx;
     const w = this.canvas.width;
@@ -40,23 +50,17 @@ export class TechnicalHUDCanvas {
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. TOP-LEFT MAGENTA DUAL FPS & ACTIVE TOOL
-    ctx.save();
+    // 1. TOP-LEFT DUAL FPS & ACTIVE TOOL
     ctx.font = 'bold 20px "JetBrains Mono", monospace';
     ctx.fillStyle = '#ff00dc';
-    ctx.shadowColor = '#ff00dc';
-    ctx.shadowBlur = 8;
     ctx.fillText('RENDER: ' + renderFps + ' FPS | VISION: ' + visionFps + ' FPS', 24, 38);
 
     ctx.font = '12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
-    ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = 5;
     const toolName = EFFECT_CONFIGS[activeTool]?.name || 'NONE';
     ctx.fillText('CURRENT TOOL: ' + toolName + ' | OBJECTS: ' + objects.length + '/5', 24, 60);
-    ctx.restore();
 
-    // 2. VERTICAL GREEN INTERACTION METER (LEFT)
+    // 2. VERTICAL INTERACTION METER (LEFT)
     const meterX = 24;
     const meterY = 90;
     const meterWidth = 18;
@@ -76,7 +80,6 @@ export class TechnicalHUDCanvas {
       meterLabel = 'SPREAD';
     }
 
-    ctx.save();
     ctx.font = 'bold 12px "JetBrains Mono", monospace';
     ctx.fillStyle = '#00ff00';
     ctx.fillText('100', meterX + meterWidth + 8, meterY + 12);
@@ -85,123 +88,102 @@ export class TechnicalHUDCanvas {
     ctx.fillStyle = '#ff00dc';
     ctx.fillText(meterLabel + ': ' + meterPercent + '%', meterX, meterY - 12);
 
+    // Meter border & fill
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 2;
-    ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = 8;
     ctx.strokeRect(meterX, meterY, meterWidth, meterHeight);
 
-    const steps = 10;
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.25)';
     ctx.lineWidth = 1;
-    ctx.shadowBlur = 0;
-    for (let i = 1; i < steps; i++) {
-      const lineY = meterY + (meterHeight / steps) * i;
-      ctx.beginPath();
+    ctx.beginPath();
+    for (let i = 1; i < 8; i++) {
+      const lineY = meterY + (meterHeight / 8) * i;
       ctx.moveTo(meterX, lineY);
       ctx.lineTo(meterX + meterWidth, lineY);
-      ctx.stroke();
     }
+    ctx.stroke();
 
     if (meterPercent > 0) {
       const fillHeight = (meterHeight * meterPercent) / 100;
       const fillY = meterY + meterHeight - fillHeight;
       ctx.fillStyle = '#00ff00';
-      ctx.shadowColor = '#00ff00';
-      ctx.shadowBlur = 12;
       ctx.fillRect(meterX + 2, fillY, meterWidth - 4, fillHeight);
     }
-    ctx.restore();
 
     if (hands.length === 0) return;
 
-    const fingerChains = [
-      [0, 1, 2, 3, 4],
-      [0, 5, 6, 7, 8],
-      [0, 9, 10, 11, 12],
-      [0, 13, 14, 15, 16],
-      [0, 17, 18, 19, 20],
-      [5, 9, 13, 17, 0]
-    ];
+    // 3. FAST BATCHED HAND TRACKING OVERLAYS
+    for (let hIdx = 0; hIdx < hands.length; hIdx++) {
+      const hand = hands[hIdx];
 
-    hands.forEach((hand, handIdx) => {
-      // Green Skeleton
+      // A. Batched Green Skeleton Bones
       if (options.showLandmarks) {
-        ctx.save();
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3.0;
-        ctx.shadowColor = '#00ff00';
-        ctx.shadowBlur = 8;
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.35)';
+        ctx.lineWidth = 6.0;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
-        fingerChains.forEach(chain => {
-          ctx.beginPath();
-          chain.forEach((idx, i) => {
-            const pt = hand.landmarks[idx];
+        ctx.beginPath();
+        for (let c = 0; c < this.fingerChains.length; c++) {
+          const chain = this.fingerChains[c];
+          for (let i = 0; i < chain.length; i++) {
+            const pt = hand.landmarks[chain[i]];
             if (i === 0) ctx.moveTo(pt.screenX, pt.screenY);
             else ctx.lineTo(pt.screenX, pt.screenY);
-          });
-          ctx.stroke();
-        });
-        ctx.restore();
+          }
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
       }
 
-      // Red Landmarks
+      // B. Batched Red Landmark Dots
       if (options.showLandmarks) {
-        ctx.save();
-        hand.landmarks.forEach(pt => {
-          ctx.beginPath();
-          ctx.arc(pt.screenX, pt.screenY, 4.0, 0, Math.PI * 2);
-          ctx.fillStyle = '#ff2828';
-          ctx.shadowColor = '#ff2828';
-          ctx.shadowBlur = 6;
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
-        });
-        ctx.restore();
+        ctx.beginPath();
+        for (let i = 0; i < hand.landmarks.length; i++) {
+          const pt = hand.landmarks[i];
+          ctx.moveTo(pt.screenX + 3.8, pt.screenY);
+          ctx.arc(pt.screenX, pt.screenY, 3.8, 0, 6.2831853);
+        }
+        ctx.fillStyle = '#ff2828';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.0;
+        ctx.stroke();
       }
 
-      // Primary Interaction Point on Index Tip
+      // C. Primary Interaction Point on Index Tip
       const indexTip = hand.indexTip;
       const thumbTip = hand.thumbTip;
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(indexTip.screenX, indexTip.screenY, 8.0, 0, Math.PI * 2);
       ctx.fillStyle = '#ff00dc';
-      ctx.shadowColor = '#ff00dc';
-      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(indexTip.screenX, indexTip.screenY, 7.5, 0, 6.2831853);
       ctx.fill();
 
-      const ringPulse = 12.0 + Math.sin(time * 6.0) * 3.0;
-      ctx.beginPath();
-      ctx.arc(indexTip.screenX, indexTip.screenY, ringPulse, 0, Math.PI * 2);
+      const ringPulse = 11.5 + Math.sin(time * 6.0) * 2.5;
       ctx.strokeStyle = '#ff00dc';
       ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(indexTip.screenX, indexTip.screenY, ringPulse, 0, 6.2831853);
       ctx.stroke();
-      ctx.restore();
 
-      // Magenta Pinch Line
-      const pinchDist = Math.hypot(thumbTip.screenX - indexTip.screenX, thumbTip.screenY - indexTip.screenY);
-      const isPinchActive = pinchDist < 75;
+      // D. Magenta Pinch Line
+      const dx = thumbTip.screenX - indexTip.screenX;
+      const dy = thumbTip.screenY - indexTip.screenY;
+      const isPinchActive = (dx * dx + dy * dy) < 5625;
 
       if (isPinchActive) {
-        ctx.save();
         ctx.strokeStyle = '#ff00dc';
         ctx.lineWidth = 3.5;
-        ctx.shadowColor = '#ff00dc';
-        ctx.shadowBlur = 16;
         ctx.beginPath();
         ctx.moveTo(thumbTip.screenX, thumbTip.screenY);
         ctx.lineTo(indexTip.screenX, indexTip.screenY);
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(thumbTip.screenX, thumbTip.screenY, 7.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#ff00dc';
+        ctx.arc(thumbTip.screenX, thumbTip.screenY, 7.0, 0, 6.2831853);
         ctx.fill();
 
         if (creationHoldProgress > 0.05 && activeTool !== VisualEffectState.NONE) {
@@ -210,7 +192,7 @@ export class TechnicalHUDCanvas {
           const label = (activeTool === VisualEffectState.RECTANGLE_TRACKING) ? 'HATCH' : 'PRISM';
 
           ctx.beginPath();
-          ctx.arc(midX, midY, 26, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * creationHoldProgress);
+          ctx.arc(midX, midY, 26, -1.5707963, -1.5707963 + 6.2831853 * creationHoldProgress);
           ctx.strokeStyle = '#00f5ff';
           ctx.lineWidth = 3.5;
           ctx.stroke();
@@ -219,57 +201,43 @@ export class TechnicalHUDCanvas {
           ctx.fillStyle = '#00f5ff';
           ctx.textAlign = 'center';
           ctx.fillText('HOLD TO CREATE ' + label, midX, midY - 32);
+          ctx.textAlign = 'start';
         }
-        ctx.restore();
       }
 
-      ctx.save();
+      // E. Hand Label & Coordinates
       ctx.font = 'bold 12px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00ff00';
-      ctx.shadowColor = '#00ff00';
-      ctx.shadowBlur = 6;
-      ctx.fillText(
-        '#' + (handIdx + 1) + ' ' + hand.handedness.toUpperCase(),
-        hand.boundingBox.minX,
-        hand.boundingBox.minY - 12
-      );
+      ctx.fillText('#' + (hIdx + 1) + ' ' + hand.handedness.toUpperCase(), hand.boundingBox.minX, hand.boundingBox.minY - 10);
 
       if (options.showCoordinates) {
         ctx.font = '10px "JetBrains Mono", monospace';
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = '#00f5ff';
-        ctx.shadowBlur = 4;
-        ctx.fillText(
-          'x:' + Math.round(indexTip.screenX) + ' y:' + Math.round(indexTip.screenY),
-          indexTip.screenX + 16,
-          indexTip.screenY + 4
-        );
+        ctx.fillText('x:' + Math.round(indexTip.screenX) + ' y:' + Math.round(indexTip.screenY), indexTip.screenX + 16, indexTip.screenY + 4);
       }
-      ctx.restore();
-    });
+    }
 
     // 4. ACTIVE OBJECT SELECTION BRACKETS
-    objects.forEach((obj, idx) => {
+    const fovFactor = (2 * Math.tan(0.52359877) * 5);
+    const invAspect = (w / h * fovFactor);
+
+    for (let idx = 0; idx < objects.length; idx++) {
+      const obj = objects[idx];
       const isSelected = obj.id === selectedObjId;
-      const screenX = (obj.position.x / (w / h * 2 * Math.tan(Math.PI / 6) * 5) + 0.5) * w;
-      const screenY = (0.5 - obj.position.y / (2 * Math.tan(Math.PI / 6) * 5)) * h;
+      const screenX = (obj.position.x / invAspect + 0.5) * w;
+      const screenY = (0.5 - obj.position.y / fovFactor) * h;
       const isHatch = obj.type === VisualEffectState.RECTANGLE_TRACKING;
-      const tagColor = isHatch ? '#00f5ff' : '#c084fc';
+      const tagColor = isSelected ? '#ff00dc' : (isHatch ? '#00f5ff' : '#c084fc');
       const label = isHatch ? 'HATCH' : 'PRISM';
 
-      ctx.save();
-      ctx.strokeStyle = isSelected ? '#ff00dc' : tagColor;
+      ctx.strokeStyle = tagColor;
       ctx.lineWidth = isSelected ? 2.5 : 1.5;
-      ctx.shadowColor = isSelected ? '#ff00dc' : tagColor;
-      ctx.shadowBlur = isSelected ? 12 : 6;
-
-      const sz = 26;
+      const sz = 24;
       ctx.strokeRect(screenX - sz, screenY - sz, sz * 2, sz * 2);
 
       ctx.font = 'bold 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = isSelected ? '#ff00dc' : tagColor;
+      ctx.fillStyle = tagColor;
       ctx.fillText('[' + label + ' #' + (idx + 1) + ' : ' + obj.state + ']', screenX - sz, screenY - sz - 6);
-      ctx.restore();
-    });
+    }
   }
 }
