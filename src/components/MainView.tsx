@@ -7,6 +7,7 @@ import { CameraManager } from '../camera/CameraManager';
 import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
 import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
 import { HandLandmarks } from '../types/vision';
+import { PerformanceMetrics } from '../types/performance';
 import { ControlBar } from './ControlBar';
 import { captureCanvasScreenshot } from '../utils/recording';
 
@@ -37,13 +38,25 @@ export const MainView: React.FC<MainViewProps> = () => {
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
   // Low-frequency UI Debug State (Updated at 5 Hz to eliminate React re-render overhead)
-  const [debugStats, setDebugStats] = useState({
+  const [debugMetrics, setDebugMetrics] = useState<PerformanceMetrics>({
+    cameraFps: 30,
+    visionFps: 28,
     renderFps: 60,
-    visionFps: 30,
-    handsCount: 0,
-    gesture: 'OPEN_PALM',
-    selectedId: 'NONE'
+    visionTimeMs: 6.0,
+    visionLatencyMs: 6.0,
+    arUpdateTimeMs: 0.8,
+    renderTimeMs: 4.2,
+    totalFrameTimeMs: 11.0,
+    frameTimeMs: 11.0,
+    qualityLevel: 'HIGH',
+    activeParticles: 350,
+    dpr: 1,
+    renderScale: 1.0
   });
+
+  const [debugSelected, setDebugSelected] = useState<string>('NONE');
+  const [debugGesture, setDebugGesture] = useState<string>('OPEN_PALM');
+  const [debugHandsCount, setDebugHandsCount] = useState<number>(0);
 
   const hudOptionsRef = useRef<HUDOptions>({
     showLandmarks: true,
@@ -130,7 +143,7 @@ export const MainView: React.FC<MainViewProps> = () => {
     setObjectCount(0);
   }, []);
 
-  // 3. High-Efficiency Vision Loop
+  // 3. High-Efficiency Vision Loop (Decoupled, Throttled to ~28 FPS)
   useEffect(() => {
     let isRunning = true;
     let timerId: ReturnType<typeof setTimeout>;
@@ -150,6 +163,7 @@ export const MainView: React.FC<MainViewProps> = () => {
       const video = videoRef.current;
 
       if (video && cameraManagerRef.current.getIsReady()) {
+        perfMonitorRef.current.recordCameraFrame(tStart);
         hands = visionServiceRef.current.detectHands(video, tStart, width, height);
       }
 
@@ -167,7 +181,7 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 4. Low-Frequency UI Statistics Poller (5 Hz)
+  // 4. Low-Frequency Telemetry Poller (5 Hz)
   useEffect(() => {
     const interval = setInterval(() => {
       const m = perfMonitorRef.current.getMetrics();
@@ -181,25 +195,22 @@ export const MainView: React.FC<MainViewProps> = () => {
         selectedLabel = typeName + ' [' + selected.state + ']';
       }
 
-      setDebugStats({
-        renderFps: m.renderFps,
-        visionFps: m.visionFps,
-        handsCount: hands.length,
-        gesture: gestures.primaryGesture,
-        selectedId: selectedLabel
-      });
+      setDebugMetrics(m);
+      setDebugHandsCount(hands.length);
+      setDebugGesture(gestures.primaryGesture);
+      setDebugSelected(selectedLabel);
     }, 200);
     return () => clearInterval(interval);
   }, []);
 
-  // 5. 60 FPS Render Loop (Zero Allocations)
+  // 5. 60 FPS Render Loop (Zero Allocations, Stage-Level Profiling)
   useEffect(() => {
     let animId: number;
     let lastTime = performance.now();
 
     const loop = (timestamp: number) => {
       animId = requestAnimationFrame(loop);
-      perfMonitorRef.current.recordRenderFrame(timestamp);
+      const frameStart = performance.now();
 
       const dt = Math.max(0.001, Math.min(0.08, (timestamp - lastTime) * 0.001));
       lastTime = timestamp;
@@ -207,9 +218,11 @@ export const MainView: React.FC<MainViewProps> = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
       const hands = latestHandsRef.current;
+
+      // Stage 1: Gesture Processing & Interaction Update
+      const updateStart = performance.now();
       const gestures = gestureEngineRef.current.processHands(hands, width, height);
 
-      // Update 3D Perspective Scene & Interaction State
       let pinchHoldProgress = 0.0;
       if (sceneManagerRef.current) {
         sceneManagerRef.current.arobjectManager.setActiveTool(activeTool);
@@ -227,8 +240,10 @@ export const MainView: React.FC<MainViewProps> = () => {
           setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
         }
       }
+      const updateEnd = performance.now();
 
-      // Render 2D Technical HUD Overlay
+      // Stage 2: 2D HUD Canvas Render
+      const renderPassStart = performance.now();
       if (hudRef.current && showHUD && sceneManagerRef.current) {
         const objects = sceneManagerRef.current.arobjectManager.getObjects();
         const selected = sceneManagerRef.current.arobjectManager.getSelectedObject();
@@ -241,14 +256,22 @@ export const MainView: React.FC<MainViewProps> = () => {
           selected ? selected.id : null,
           pinchHoldProgress,
           hudOptionsRef.current,
-          metrics.renderFps,
-          metrics.visionFps,
+          metrics,
           timestamp * 0.001
         );
       } else if (hudRef.current && !showHUD) {
         const ctx = hudCanvasRef.current?.getContext('2d');
         if (ctx) ctx.clearRect(0, 0, width, height);
       }
+      const renderPassEnd = performance.now();
+
+      const totalFrameEnd = performance.now();
+      perfMonitorRef.current.recordRenderTimings(
+        updateEnd - updateStart,
+        renderPassEnd - renderPassStart,
+        totalFrameEnd - frameStart,
+        totalFrameEnd
+      );
     };
 
     animId = requestAnimationFrame(loop);
@@ -274,7 +297,7 @@ export const MainView: React.FC<MainViewProps> = () => {
 
   const handleCapture = useCallback(() => {
     if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-efficient.png');
+      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-audit.png');
     }
   }, []);
 
@@ -304,23 +327,38 @@ export const MainView: React.FC<MainViewProps> = () => {
       {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, DUAL FPS) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* HIGH-PERFORMANCE ARCHITECTURE DEBUG PANEL (TOP-RIGHT) */}
+      {/* PERFORMANCE AUDIT HUD (TOP-RIGHT) */}
       {showDebug && (
-        <div className="absolute top-4 right-4 z-30 p-3 bg-black/85 backdrop-blur-md border border-cyan-500/30 rounded-lg text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[220px]">
-          <div className="flex items-center justify-between border-b border-white/10 pb-1 font-bold text-cyan-400">
-            <span>CORE AR ENGINE</span>
+        <div className="absolute top-4 right-4 z-30 p-3.5 bg-black/90 backdrop-blur-md border border-cyan-500/40 rounded-xl text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[240px]">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1.5 font-bold text-cyan-400">
+            <span>PERFORMANCE AUDIT</span>
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           </div>
-          <div className="flex justify-between"><span className="text-white/60">CAMERA:</span> <span className={cameraStatus === 'ACTIVE' ? 'text-green-400 font-bold' : 'text-yellow-400'}>{cameraStatus}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">VIDEO:</span> <span>{videoDimensions}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">HANDS:</span> <span className="text-pink-400 font-bold">{debugStats.handsCount}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">GESTURE:</span> <span className="text-yellow-300 font-bold">{debugStats.gesture}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">RENDER:</span> <span className="text-green-400 font-bold">{debugStats.renderFps} FPS</span></div>
-          <div className="flex justify-between"><span className="text-white/60">VISION:</span> <span className="text-cyan-300 font-bold">{debugStats.visionFps} FPS</span></div>
-          <div className="flex justify-between"><span className="text-white/60">CURRENT TOOL:</span> <span className="text-cyan-300 font-bold">{EFFECT_CONFIGS[activeTool]?.name || 'NONE'}</span></div>
-          <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
-          <div className="flex justify-between"><span className="text-white/60">SELECTED:</span> <span className="text-pink-400 font-bold">{debugStats.selectedId}</span></div>
-          <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle panel</div>
+
+          {/* Frame Rates */}
+          <div className="grid grid-cols-3 gap-1 py-1 border-b border-white/10 text-center font-bold">
+            <div><div className="text-[10px] text-white/50">CAMERA</div><div className="text-emerald-400">{debugMetrics.cameraFps} FPS</div></div>
+            <div><div className="text-[10px] text-white/50">VISION</div><div className="text-cyan-300">{debugMetrics.visionFps} FPS</div></div>
+            <div><div className="text-[10px] text-white/50">RENDER</div><div className="text-pink-400">{debugMetrics.renderFps} FPS</div></div>
+          </div>
+
+          {/* Frame Stage Timings */}
+          <div className="space-y-1 py-1 border-b border-white/10 text-[11px]">
+            <div className="flex justify-between"><span className="text-white/60">VISION TIME:</span> <span className="text-cyan-300">{debugMetrics.visionTimeMs} ms</span></div>
+            <div className="flex justify-between"><span className="text-white/60">UPDATE TIME:</span> <span className="text-yellow-300">{debugMetrics.arUpdateTimeMs} ms</span></div>
+            <div className="flex justify-between"><span className="text-white/60">RENDER TIME:</span> <span className="text-purple-300">{debugMetrics.renderTimeMs} ms</span></div>
+            <div className="flex justify-between font-bold"><span className="text-white/80">TOTAL FRAME:</span> <span className="text-green-400">{debugMetrics.totalFrameTimeMs} ms</span></div>
+          </div>
+
+          {/* Runtime State */}
+          <div className="space-y-1 pt-1 text-[11px]">
+            <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
+            <div className="flex justify-between"><span className="text-white/60">PARTICLES:</span> <span>{debugMetrics.activeParticles}</span></div>
+            <div className="flex justify-between"><span className="text-white/60">QUALITY / DPR:</span> <span className="text-emerald-300">{debugMetrics.qualityLevel} ({debugMetrics.dpr}x)</span></div>
+            <div className="flex justify-between"><span className="text-white/60">RENDER SCALE:</span> <span>{debugMetrics.renderScale.toFixed(2)}x</span></div>
+            <div className="flex justify-between"><span className="text-white/60">SELECTED:</span> <span className="text-pink-400 font-bold">{debugSelected}</span></div>
+          </div>
+          <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle HUD</div>
         </div>
       )}
 

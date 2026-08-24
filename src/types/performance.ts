@@ -5,9 +5,11 @@ export interface PerformanceMetrics {
   visionFps: number;
   renderFps: number;
   visionTimeMs: number;
+  visionLatencyMs: number;
   arUpdateTimeMs: number;
   renderTimeMs: number;
   totalFrameTimeMs: number;
+  frameTimeMs: number;
   qualityLevel: QualityLevel;
   activeParticles: number;
   dpr: number;

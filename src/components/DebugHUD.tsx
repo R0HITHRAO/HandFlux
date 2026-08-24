@@ -40,7 +40,7 @@ export const DebugHUD: React.FC<DebugHUDProps> = ({
 
       <div className="flex justify-between">
         <span className="text-white/50">VISION FPS:</span>
-        <span className="text-white/90">{performance.visionFps} ({performance.visionLatencyMs}ms)</span>
+        <span className="text-white/90">{performance.visionFps} ({performance.visionTimeMs}ms)</span>
       </div>
 
       <div className="flex justify-between">
