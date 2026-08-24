@@ -8,7 +8,7 @@ describe('GestureEngine', () => {
 
   it('handles empty hand list gracefully', () => {
     const metrics = engine.processHands([], 1280, 720);
-    expect(metrics.primaryGesture).toBe('UNKNOWN');
+    expect(metrics.primaryGesture).toBe('NONE');
     expect(metrics.twoHandDistance).toBe(0);
     expect(metrics.isPinching).toBe(false);
   });

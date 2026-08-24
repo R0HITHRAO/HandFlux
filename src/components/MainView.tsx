@@ -5,31 +5,40 @@ import { HandLandmarkerService } from '../vision/HandLandmarkerService';
 import { GestureEngine } from '../vision/GestureEngine';
 import { CameraManager } from '../camera/CameraManager';
 import { PerformanceMonitor } from '../rendering/PerformanceMonitor';
-import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
+import { VisualEffectState } from '../types/effects';
 import { HandLandmarks } from '../types/vision';
 import { PerformanceMetrics } from '../types/performance';
+import { AppMode, GestureMetrics } from '../types/gestures';
 import { ControlBar } from './ControlBar';
+import { ModeSelector } from './ModeSelector';
+import { PresentationView } from '../presentation/PresentationView';
+import { PresentationController } from '../presentation/PresentationController';
+import { MolecularScene, AtomData } from '../viewer3d/MolecularScene';
+import { MolecularViewer } from '../viewer3d/MolecularViewer';
+import { CalibrationModal } from '../calibration/CalibrationModal';
+import { SettingsModal } from '../settings/SettingsModal';
+import { RecruiterDemoTour } from './RecruiterDemoTour';
 import { captureCanvasScreenshot } from '../utils/recording';
+import * as THREE from 'three';
 
-interface MainViewProps {
-  initialMode?: 'LIVE' | 'DEMO';
-  initialUseSimulation?: boolean;
-}
-
-export const MainView: React.FC<MainViewProps> = () => {
+export const MainView: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const arContainerRef = useRef<HTMLDivElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const sceneManagerRef = useRef<SceneManager | null>(null);
+  const molecularSceneRef = useRef<MolecularScene | null>(null);
   const hudRef = useRef<TechnicalHUDCanvas | null>(null);
   const cameraManagerRef = useRef<CameraManager>(new CameraManager());
   const visionServiceRef = useRef<HandLandmarkerService>(new HandLandmarkerService());
   const gestureEngineRef = useRef<GestureEngine>(new GestureEngine());
+  const presentationRef = useRef<PresentationController>(new PresentationController());
   const perfMonitorRef = useRef<PerformanceMonitor>(new PerformanceMonitor());
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
+  // Application States
+  const [activeMode, setActiveMode] = useState<AppMode>('PRESENTATION');
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
@@ -37,7 +46,31 @@ export const MainView: React.FC<MainViewProps> = () => {
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
-  // Low-frequency UI Debug State (Updated at 5 Hz to eliminate React re-render overhead)
+  // Presentation Mode Slide State
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+  const [activeAtom, setActiveAtom] = useState<AtomData | null>(null);
+
+  // Modals
+  const [isCalibrationOpen, setIsCalibrationOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isTourActive, setIsTourActive] = useState<boolean>(false);
+
+  const [latestGestures, setLatestGestures] = useState<GestureMetrics>({
+    primaryGesture: 'NONE',
+    isPinching: false,
+    isPointing: false,
+    isOpenPalm: false,
+    isFist: false,
+    pinchDistance: 1,
+    spread: 0,
+    pointerPosition: { screenX: 0, screenY: 0 },
+    twoHandDistance: 0,
+    twoHandAngle: 0,
+    twoHandMidpoint: { screenX: 0, screenY: 0 },
+    swipeDirection: 'NONE',
+    swipeVelocity: 0
+  });
+
   const [debugMetrics, setDebugMetrics] = useState<PerformanceMetrics>({
     cameraFps: 30,
     visionFps: 28,
@@ -54,24 +87,17 @@ export const MainView: React.FC<MainViewProps> = () => {
     renderScale: 1.0
   });
 
-  const [debugSelected, setDebugSelected] = useState<string>('NONE');
-  const [debugGesture, setDebugGesture] = useState<string>('OPEN_PALM');
-  const [debugHandsCount, setDebugHandsCount] = useState<number>(0);
-
-  const hudOptionsRef = useRef<HUDOptions>({
-    showLandmarks: true,
-    showCoordinates: true,
-    showGuides: true,
-    showReticles: true,
-    showBoundingBox: true
-  });
-
-  // 1. Initial WebGL & Camera Setup
+  // 1. Initial Setup
   useEffect(() => {
     if (!arContainerRef.current || !hudCanvasRef.current || !videoRef.current) return;
 
     const scene = new SceneManager(arContainerRef.current);
     sceneManagerRef.current = scene;
+
+    const mol = new MolecularScene();
+    molecularSceneRef.current = mol;
+    scene.arobjectManager['sceneGroup'].add(mol.group);
+    mol.group.visible = false;
 
     const hud = new TechnicalHUDCanvas(hudCanvasRef.current);
     hudRef.current = hud;
@@ -113,37 +139,31 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 2. Discrete Event Handlers
-  const handleCreateObject = useCallback(() => {
-    if (!sceneManagerRef.current) return;
-    const hands = latestHandsRef.current;
-    if (hands.length === 0) return;
-
-    const newObj = sceneManagerRef.current.arobjectManager.createObjectAtHand(
-      activeTool,
-      hands[0],
-      window.innerWidth,
-      window.innerHeight
-    );
-    if (newObj) {
-      setActiveTool(newObj.type);
-      setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
+  // 2. Mode Switching
+  const handleSelectMode = useCallback((mode: AppMode) => {
+    setActiveMode(mode);
+    if (molecularSceneRef.current) {
+      molecularSceneRef.current.group.visible = (mode === 'VIEWER_3D');
     }
-  }, [activeTool]);
-
-  const handleDeleteSelected = useCallback(() => {
-    if (!sceneManagerRef.current) return;
-    sceneManagerRef.current.arobjectManager.deleteSelected();
-    setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
   }, []);
 
-  const handleClearAll = useCallback(() => {
-    if (!sceneManagerRef.current) return;
-    sceneManagerRef.current.arobjectManager.clearAll();
-    setObjectCount(0);
-  }, []);
+  // 3. Gesture Event Subscriptions
+  useEffect(() => {
+    const unsub = gestureEngineRef.current.addEventListener((event) => {
+      if (activeMode === 'PRESENTATION') {
+        if (event.type === 'SWIPE_LEFT') {
+          presentationRef.current.nextSlide();
+          setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
+        } else if (event.type === 'SWIPE_RIGHT') {
+          presentationRef.current.prevSlide();
+          setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
+        }
+      }
+    });
+    return unsub;
+  }, [activeMode]);
 
-  // 3. High-Efficiency Vision Loop (Decoupled, Throttled to ~28 FPS)
+  // 4. Asynchronous Vision Loop (~28 FPS)
   useEffect(() => {
     let isRunning = true;
     let timerId: ReturnType<typeof setTimeout>;
@@ -181,29 +201,7 @@ export const MainView: React.FC<MainViewProps> = () => {
     };
   }, []);
 
-  // 4. Low-Frequency Telemetry Poller (5 Hz)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const m = perfMonitorRef.current.getMetrics();
-      const hands = latestHandsRef.current;
-      const gestures = gestureEngineRef.current.processHands(hands, window.innerWidth, window.innerHeight);
-      const selected = sceneManagerRef.current?.arobjectManager.getSelectedObject();
-
-      let selectedLabel = 'NONE';
-      if (selected) {
-        const typeName = (selected.type === VisualEffectState.RECTANGLE_TRACKING) ? 'HATCH' : 'PRISM';
-        selectedLabel = typeName + ' [' + selected.state + ']';
-      }
-
-      setDebugMetrics(m);
-      setDebugHandsCount(hands.length);
-      setDebugGesture(gestures.primaryGesture);
-      setDebugSelected(selectedLabel);
-    }, 200);
-    return () => clearInterval(interval);
-  }, []);
-
-  // 5. 60 FPS Render Loop (Zero Allocations, Stage-Level Profiling)
+  // 5. 60 FPS Render Loop
   useEffect(() => {
     let animId: number;
     let lastTime = performance.now();
@@ -219,18 +217,34 @@ export const MainView: React.FC<MainViewProps> = () => {
       const height = window.innerHeight;
       const hands = latestHandsRef.current;
 
-      // Stage 1: Gesture Processing & Interaction Update
+      // Stage 1: Gesture Engine Processing
       const updateStart = performance.now();
-      const gestures = gestureEngineRef.current.processHands(hands, width, height);
+      const gestures = gestureEngineRef.current.processHands(hands, width, height, timestamp);
+
+      // 3D Molecule Manipulation (Grab, Rotate, Scale)
+      if (activeMode === 'VIEWER_3D' && molecularSceneRef.current) {
+        const mol = molecularSceneRef.current.group;
+        if (gestures.isPinching && hands.length > 0) {
+          mol.position.x = (gestures.pointerPosition.screenX / width - 0.5) * 6;
+          mol.position.y = (0.5 - gestures.pointerPosition.screenY / height) * 4;
+        }
+        if (hands.length >= 2) {
+          mol.scale.setScalar(Math.max(0.5, Math.min(2.5, gestures.twoHandDistance * 2.2)));
+          mol.rotation.z = gestures.twoHandAngle;
+        } else if (!gestures.isPinching) {
+          mol.rotation.y += dt * 0.4;
+          mol.rotation.x += dt * 0.2;
+        }
+      }
 
       let pinchHoldProgress = 0.0;
       if (sceneManagerRef.current) {
-        sceneManagerRef.current.arobjectManager.setActiveTool(activeTool);
+        sceneManagerRef.current.arobjectManager.setActiveTool(activeMode === 'AR_LAB' ? activeTool : VisualEffectState.NONE);
         const renderScale = perfMonitorRef.current.getRenderScale();
         const res = sceneManagerRef.current.updateAndRender(
           hands,
           gestures,
-          activeTool,
+          activeMode === 'AR_LAB' ? activeTool : VisualEffectState.NONE,
           dt,
           timestamp * 0.001,
           renderScale
@@ -255,7 +269,7 @@ export const MainView: React.FC<MainViewProps> = () => {
           objects,
           selected ? selected.id : null,
           pinchHoldProgress,
-          hudOptionsRef.current,
+          { showLandmarks: true, showCoordinates: true, showGuides: true, showReticles: true, showBoundingBox: true },
           metrics,
           timestamp * 0.001
         );
@@ -276,38 +290,38 @@ export const MainView: React.FC<MainViewProps> = () => {
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [showHUD, activeTool]);
+  }, [showHUD, activeTool, activeMode]);
 
-  // Keyboard Shortcuts
+  // 6. 5 Hz UI Telemetry Poller
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDebugMetrics(perfMonitorRef.current.getMetrics());
+      const hands = latestHandsRef.current;
+      const g = gestureEngineRef.current.processHands(hands, window.innerWidth, window.innerHeight);
+      setLatestGestures(g);
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Keyboard Hotkeys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '1' || e.key === 'h' || e.key === 'H') {
-        setActiveTool(prev => prev === VisualEffectState.RECTANGLE_TRACKING ? VisualEffectState.NONE : VisualEffectState.RECTANGLE_TRACKING);
+      if (e.key === 'ArrowRight') {
+        presentationRef.current.nextSlide();
+        setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
       }
-      if (e.key === '2' || e.key === 'p' || e.key === 'P') {
-        setActiveTool(prev => prev === VisualEffectState.PURPLE_PRISM ? VisualEffectState.NONE : VisualEffectState.PURPLE_PRISM);
+      if (e.key === 'ArrowLeft') {
+        presentationRef.current.prevSlide();
+        setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
       }
-      if (e.key === ' ' || e.key === 'Enter') handleCreateObject();
-      if (e.key === 'Delete' || e.key === 'Backspace') handleDeleteSelected();
+      if (e.key === '1') handleSelectMode('PRESENTATION');
+      if (e.key === '2') handleSelectMode('VIEWER_3D');
+      if (e.key === '3') handleSelectMode('AR_LAB');
       if (e.key === 'd' || e.key === 'D') setShowDebug(p => !p);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCreateObject, handleDeleteSelected]);
-
-  const handleCapture = useCallback(() => {
-    if (sceneManagerRef.current && hudCanvasRef.current) {
-      captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-audit.png');
-    }
-  }, []);
-
-  const handleToggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
-  }, []);
+  }, [handleSelectMode]);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
@@ -321,61 +335,104 @@ export const MainView: React.FC<MainViewProps> = () => {
         style={{ transform: 'scaleX(-1)' }}
       />
 
-      {/* LAYER 1: TRANSPARENT THREE.JS WebGL ON-DEMAND AR CANVAS */}
+      {/* LAYER 1: THREE.JS 3D CANVAS (MOLECULE & AR OBJECTS) */}
       <div ref={arContainerRef} className="absolute inset-0 z-10 pointer-events-none" />
 
-      {/* LAYER 2: 2D HUD CANVAS (RED LANDMARKS, GREEN SKELETON, METER, DUAL FPS) */}
+      {/* LAYER 2: 2D HUD CANVAS (LANDMARKS, SKELETON, METER, FPS) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* PERFORMANCE AUDIT HUD (TOP-RIGHT) */}
-      {showDebug && (
-        <div className="absolute top-4 right-4 z-30 p-3.5 bg-black/90 backdrop-blur-md border border-cyan-500/40 rounded-xl text-xs font-mono space-y-1.5 shadow-2xl text-white pointer-events-none min-w-[240px]">
-          <div className="flex items-center justify-between border-b border-white/10 pb-1.5 font-bold text-cyan-400">
-            <span>PERFORMANCE AUDIT</span>
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          </div>
+      {/* MODE SELECTOR (TOP NAVBAR) */}
+      <ModeSelector
+        activeMode={activeMode}
+        onSelectMode={handleSelectMode}
+        onStartTour={() => setIsTourActive(true)}
+        onOpenCalibration={() => setIsCalibrationOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
 
-          {/* Frame Rates */}
-          <div className="grid grid-cols-3 gap-1 py-1 border-b border-white/10 text-center font-bold">
-            <div><div className="text-[10px] text-white/50">CAMERA</div><div className="text-emerald-400">{debugMetrics.cameraFps} FPS</div></div>
-            <div><div className="text-[10px] text-white/50">VISION</div><div className="text-cyan-300">{debugMetrics.visionFps} FPS</div></div>
-            <div><div className="text-[10px] text-white/50">RENDER</div><div className="text-pink-400">{debugMetrics.renderFps} FPS</div></div>
-          </div>
-
-          {/* Frame Stage Timings */}
-          <div className="space-y-1 py-1 border-b border-white/10 text-[11px]">
-            <div className="flex justify-between"><span className="text-white/60">VISION TIME:</span> <span className="text-cyan-300">{debugMetrics.visionTimeMs} ms</span></div>
-            <div className="flex justify-between"><span className="text-white/60">UPDATE TIME:</span> <span className="text-yellow-300">{debugMetrics.arUpdateTimeMs} ms</span></div>
-            <div className="flex justify-between"><span className="text-white/60">RENDER TIME:</span> <span className="text-purple-300">{debugMetrics.renderTimeMs} ms</span></div>
-            <div className="flex justify-between font-bold"><span className="text-white/80">TOTAL FRAME:</span> <span className="text-green-400">{debugMetrics.totalFrameTimeMs} ms</span></div>
-          </div>
-
-          {/* Runtime State */}
-          <div className="space-y-1 pt-1 text-[11px]">
-            <div className="flex justify-between"><span className="text-white/60">OBJECTS:</span> <span className="text-yellow-300 font-bold">{objectCount}/5</span></div>
-            <div className="flex justify-between"><span className="text-white/60">PARTICLES:</span> <span>{debugMetrics.activeParticles}</span></div>
-            <div className="flex justify-between"><span className="text-white/60">QUALITY / DPR:</span> <span className="text-emerald-300">{debugMetrics.qualityLevel} ({debugMetrics.dpr}x)</span></div>
-            <div className="flex justify-between"><span className="text-white/60">RENDER SCALE:</span> <span>{debugMetrics.renderScale.toFixed(2)}x</span></div>
-            <div className="flex justify-between"><span className="text-white/60">SELECTED:</span> <span className="text-pink-400 font-bold">{debugSelected}</span></div>
-          </div>
-          <div className="pt-1 text-[10px] text-white/40 border-t border-white/10">Press D to toggle HUD</div>
-        </div>
+      {/* MODE 1: PRESENTATION VIEW */}
+      {activeMode === 'PRESENTATION' && (
+        <PresentationView
+          slide={presentationRef.current.getCurrentSlide()}
+          currentIndex={currentSlideIndex}
+          totalSlides={presentationRef.current.getSlideCount()}
+          gestures={latestGestures}
+          onPrev={() => {
+            presentationRef.current.prevSlide();
+            setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
+          }}
+          onNext={() => {
+            presentationRef.current.nextSlide();
+            setCurrentSlideIndex(presentationRef.current.getCurrentIndex());
+          }}
+          onSelectSlide={(idx) => {
+            presentationRef.current.setSlide(idx);
+            setCurrentSlideIndex(idx);
+          }}
+        />
       )}
 
-      {/* LAYER 3: TOOLBAR WITH HATCH & PRISM SELECTORS, CREATE, DELETE & CLEAR */}
-      <ControlBar
-        activeTool={activeTool}
-        isThermalActive={false}
-        showHUD={showHUD}
-        objectCount={objectCount}
-        onSelectTool={setActiveTool}
-        onToggleThermal={() => {}}
-        onCreateObject={handleCreateObject}
-        onDeleteSelected={handleDeleteSelected}
-        onClearAll={handleClearAll}
-        onCapture={handleCapture}
-        onToggleHUD={() => setShowHUD(p => !p)}
-        onToggleFullscreen={handleToggleFullscreen}
+      {/* MODE 2: 3D MOLECULAR VIEWER OVERLAY */}
+      {activeMode === 'VIEWER_3D' && (
+        <MolecularViewer activeAtom={activeAtom} gestures={latestGestures} />
+      )}
+
+      {/* MODE 3: AR LAB CONTROLS */}
+      {activeMode === 'AR_LAB' && (
+        <ControlBar
+          activeTool={activeTool}
+          isThermalActive={false}
+          showHUD={showHUD}
+          objectCount={objectCount}
+          onSelectTool={setActiveTool}
+          onToggleThermal={() => {}}
+          onCreateObject={() => {
+            if (sceneManagerRef.current && latestHandsRef.current.length > 0) {
+              sceneManagerRef.current.arobjectManager.createObjectAtHand(activeTool, latestHandsRef.current[0], window.innerWidth, window.innerHeight);
+              setObjectCount(sceneManagerRef.current.arobjectManager.getObjects().length);
+            }
+          }}
+          onDeleteSelected={() => {
+            sceneManagerRef.current?.arobjectManager.deleteSelected();
+            setObjectCount(sceneManagerRef.current?.arobjectManager.getObjects().length || 0);
+          }}
+          onClearAll={() => {
+            sceneManagerRef.current?.arobjectManager.clearAll();
+            setObjectCount(0);
+          }}
+          onCapture={() => {
+            if (sceneManagerRef.current && hudCanvasRef.current) {
+              captureCanvasScreenshot(sceneManagerRef.current.getDomElement(), hudCanvasRef.current, 'handflux-portfolio.png');
+            }
+          }}
+          onToggleHUD={() => setShowHUD(p => !p)}
+          onToggleFullscreen={() => {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+            else document.exitFullscreen().catch(() => {});
+          }}
+        />
+      )}
+
+      {/* RECRUITER DEMO TOUR */}
+      <RecruiterDemoTour
+        isActive={isTourActive}
+        onStop={() => setIsTourActive(false)}
+        onSetMode={handleSelectMode}
+      />
+
+      {/* CALIBRATION & SETTINGS MODALS */}
+      <CalibrationModal
+        isOpen={isCalibrationOpen}
+        gestures={latestGestures}
+        onClose={() => setIsCalibrationOpen(false)}
+        onComplete={({ pinchThreshold }) => {
+          gestureEngineRef.current.setPinchThreshold(pinchThreshold);
+        }}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );

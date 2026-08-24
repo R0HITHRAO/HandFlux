@@ -1,107 +1,152 @@
 import { HandLandmarks } from '../types/vision';
-import { GestureMetrics, HandGestureType } from '../types/gestures';
-import { distance2D, angleBetween } from '../utils/mathUtils';
+import { GestureMetrics, GestureType, GestureEvent } from '../types/gestures';
 
 export class GestureEngine {
-  private candidateGesture: HandGestureType = 'UNKNOWN';
-  private candidateDuration: number = 0;
-  private confirmedGesture: HandGestureType = 'UNKNOWN';
-  private lastProcessTime: number = performance.now();
+  private pinchThreshold: number = 65.0;
+  private swipeHistory: { x: number; y: number; time: number }[] = [];
+  private lastSwipeTime: number = 0;
+  private swipeCooldownMs: number = 600;
+  private listeners: ((event: GestureEvent) => void)[] = [];
 
-  public processHands(hands: HandLandmarks[], screenWidth: number, screenHeight: number): GestureMetrics {
-    const now = performance.now();
-    const dt = Math.max(0.001, (now - this.lastProcessTime) / 1000);
-    this.lastProcessTime = now;
-
-    if (hands.length === 0) {
-      this.confirmedGesture = 'UNKNOWN';
-      return {
-        primaryGesture: 'UNKNOWN',
-        pinchDistance: 1,
-        isPinching: false,
-        twoHandDistance: 0,
-        twoHandAngle: 0,
-        twoHandMidpoint: { x: 0.5, y: 0.5, screenX: screenWidth * 0.5, screenY: screenHeight * 0.5 },
-        spread: 0,
-        overallVelocity: 0
-      };
-    }
-
-    const hand1 = hands[0];
-    const pinchDist = distance2D(hand1.thumbTip, hand1.indexTip);
-    const isPinching = pinchDist < 0.075;
-    const rawGesture = this.classifySingleHand(hand1, pinchDist);
-
-    // Temporal Gesture Filtering: Require stability for 80ms before switching
-    if (rawGesture === this.candidateGesture) {
-      this.candidateDuration += dt;
-      if (this.candidateDuration >= 0.08) {
-        this.confirmedGesture = rawGesture;
-      }
-    } else {
-      this.candidateGesture = rawGesture;
-      this.candidateDuration = 0;
-    }
-
-    let twoHandDistance = 0;
-    let twoHandAngle = 0;
-    let twoHandMidpoint = {
-      x: hand1.palmCenter.x,
-      y: hand1.palmCenter.y,
-      screenX: hand1.palmCenter.screenX,
-      screenY: hand1.palmCenter.screenY
-    };
-    let secondaryGesture: HandGestureType | undefined = undefined;
-
-    if (hands.length >= 2) {
-      const hand2 = hands[1];
-      secondaryGesture = this.classifySingleHand(hand2, distance2D(hand2.thumbTip, hand2.indexTip));
-      twoHandDistance = distance2D(hand1.palmCenter, hand2.palmCenter);
-      twoHandAngle = angleBetween(hand1.palmCenter, hand2.palmCenter);
-      twoHandMidpoint = {
-        x: (hand1.palmCenter.x + hand2.palmCenter.x) * 0.5,
-        y: (hand1.palmCenter.y + hand2.palmCenter.y) * 0.5,
-        screenX: (hand1.palmCenter.screenX + hand2.palmCenter.screenX) * 0.5,
-        screenY: (hand1.palmCenter.screenY + hand2.palmCenter.screenY) * 0.5
-      };
-    }
-
-    const overallVelocity = hands.reduce((acc, h) => acc + h.velocity.speed, 0) / hands.length;
-    const spread = distance2D(hand1.thumbTip, hand1.pinkyTip);
-
-    return {
-      primaryGesture: this.confirmedGesture,
-      secondaryGesture,
-      pinchDistance: pinchDist,
-      isPinching,
-      twoHandDistance,
-      twoHandAngle,
-      twoHandMidpoint,
-      spread,
-      overallVelocity
+  public addEventListener(listener: (event: GestureEvent) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
     };
   }
 
-  private classifySingleHand(hand: HandLandmarks, pinchDist: number): HandGestureType {
-    if (pinchDist < 0.075) return 'PINCH';
+  private emitEvent(event: GestureEvent): void {
+    for (let i = 0; i < this.listeners.length; i++) {
+      this.listeners[i](event);
+    }
+  }
 
-    const indexExtended = hand.indexTip.y < hand.landmarks[6].y;
-    const middleExtended = hand.middleTip.y < hand.landmarks[10].y;
-    const ringExtended = hand.ringTip.y < hand.landmarks[14].y;
-    const pinkyExtended = hand.pinkyTip.y < hand.landmarks[18].y;
+  public setPinchThreshold(val: number): void {
+    this.pinchThreshold = val;
+  }
 
-    if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      return 'POINTING';
+  public processHands(
+    hands: HandLandmarks[],
+    screenWidth: number,
+    screenHeight: number,
+    timestamp: number = performance.now()
+  ): GestureMetrics {
+    if (hands.length === 0) {
+      this.swipeHistory = [];
+      return {
+        primaryGesture: 'NONE',
+        isPinching: false,
+        isPointing: false,
+        isOpenPalm: false,
+        isFist: false,
+        pinchDistance: 1.0,
+        spread: 0,
+        pointerPosition: { screenX: screenWidth * 0.5, screenY: screenHeight * 0.5 },
+        twoHandDistance: 0,
+        twoHandAngle: 0,
+        twoHandMidpoint: { screenX: screenWidth * 0.5, screenY: screenHeight * 0.5 },
+        swipeDirection: 'NONE',
+        swipeVelocity: 0
+      };
     }
-    if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
-      return 'PEACE';
+
+    const h1 = hands[0];
+    const thumbTip = h1.thumbTip;
+    const indexTip = h1.indexTip;
+    const middleTip = h1.middleTip;
+    const ringTip = h1.ringTip;
+    const pinkyTip = h1.pinkyTip;
+    const wrist = h1.wrist;
+
+    // 1. Pinch Detection (Squared Euclidean distance)
+    const dxP = thumbTip.screenX - indexTip.screenX;
+    const dyP = thumbTip.screenY - indexTip.screenY;
+    const pinchDistSq = dxP * dxP + dyP * dyP;
+    const pinchDistance = Math.sqrt(pinchDistSq);
+    const isPinching = pinchDistance < this.pinchThreshold;
+
+    // 2. Point Detection (Index extended, others curled)
+    const dIndexWrist = Math.hypot(indexTip.screenX - wrist.screenX, indexTip.screenY - wrist.screenY);
+    const dMiddleWrist = Math.hypot(middleTip.screenX - wrist.screenX, middleTip.screenY - wrist.screenY);
+    const dRingWrist = Math.hypot(ringTip.screenX - wrist.screenX, ringTip.screenY - wrist.screenY);
+    const isPointing = dIndexWrist > 110 && dMiddleWrist < dIndexWrist * 0.75 && !isPinching;
+
+    // 3. Open Palm vs Fist
+    const spread = Math.hypot(pinkyTip.screenX - thumbTip.screenX, pinkyTip.screenY - thumbTip.screenY) / Math.max(1, h1.boundingBox.width);
+    const isOpenPalm = spread > 0.85 && dIndexWrist > 100 && dMiddleWrist > 100;
+    const isFist = spread < 0.45 && dIndexWrist < 85 && dMiddleWrist < 85 && !isPinching;
+
+    // 4. Swipe Detection with Velocity Buffer
+    this.swipeHistory.push({ x: indexTip.screenX, y: indexTip.screenY, time: timestamp });
+    if (this.swipeHistory.length > 10) this.swipeHistory.shift();
+
+    let swipeDirection: 'LEFT' | 'RIGHT' | 'NONE' = 'NONE';
+    let swipeVelocity = 0;
+
+    if (this.swipeHistory.length >= 4 && (timestamp - this.lastSwipeTime) > this.swipeCooldownMs) {
+      const first = this.swipeHistory[0];
+      const last = this.swipeHistory[this.swipeHistory.length - 1];
+      const dtSec = Math.max(0.05, (last.time - first.time) * 0.001);
+      const dx = last.x - first.x;
+      swipeVelocity = Math.abs(dx) / dtSec;
+
+      if (Math.abs(dx) > 130 && swipeVelocity > 450) {
+        swipeDirection = dx < 0 ? 'LEFT' : 'RIGHT';
+        this.lastSwipeTime = timestamp;
+        this.emitEvent({
+          type: swipeDirection === 'LEFT' ? 'SWIPE_LEFT' : 'SWIPE_RIGHT',
+          timestamp,
+          confidence: 0.92,
+          swipeVelocity
+        });
+      }
     }
-    if (!indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
-      return 'FIST';
+
+    // 5. Two-Hand Distance & Orientation
+    let twoHandDistance = 0;
+    let twoHandAngle = 0;
+    let twoHandMidpoint = { screenX: indexTip.screenX, screenY: indexTip.screenY };
+
+    if (hands.length >= 2) {
+      const h2 = hands[1];
+      const dx2 = (h2.indexTip.screenX - h1.indexTip.screenX) / screenWidth;
+      const dy2 = (h2.indexTip.screenY - h1.indexTip.screenY) / screenHeight;
+      twoHandDistance = Math.hypot(dx2, dy2);
+      twoHandAngle = Math.atan2(h2.indexTip.screenY - h1.indexTip.screenY, h2.indexTip.screenX - h1.indexTip.screenX);
+      twoHandMidpoint = {
+        screenX: (h1.indexTip.screenX + h2.indexTip.screenX) * 0.5,
+        screenY: (h1.indexTip.screenY + h2.indexTip.screenY) * 0.5
+      };
     }
-    if (indexExtended && middleExtended && ringExtended && pinkyExtended) {
-      return 'OPEN_PALM';
+
+    // Determine Primary Gesture
+    let primaryGesture: GestureType = 'NONE';
+    if (hands.length >= 2 && Math.abs(twoHandDistance) > 0.15) {
+      primaryGesture = 'TWO_HAND_SCALE';
+    } else if (isPinching) {
+      primaryGesture = 'PINCH';
+    } else if (isPointing) {
+      primaryGesture = 'POINT';
+    } else if (isOpenPalm) {
+      primaryGesture = 'OPEN_PALM';
+    } else if (isFist) {
+      primaryGesture = 'FIST';
     }
-    return 'UNKNOWN';
+
+    return {
+      primaryGesture,
+      isPinching,
+      isPointing,
+      isOpenPalm,
+      isFist,
+      pinchDistance: pinchDistance / Math.max(1, screenWidth),
+      spread,
+      pointerPosition: { screenX: indexTip.screenX, screenY: indexTip.screenY },
+      twoHandDistance,
+      twoHandAngle,
+      twoHandMidpoint,
+      swipeDirection,
+      swipeVelocity
+    };
   }
 }

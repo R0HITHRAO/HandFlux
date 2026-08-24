@@ -1,21 +1,38 @@
-export type HandGestureType = 
-  | 'UNKNOWN'
-  | 'OPEN_PALM'
-  | 'POINTING'
+export type AppMode = 'PRESENTATION' | 'VIEWER_3D' | 'AR_LAB';
+
+export type GestureType =
+  | 'NONE'
+  | 'POINT'
   | 'PINCH'
+  | 'SWIPE_LEFT'
+  | 'SWIPE_RIGHT'
+  | 'OPEN_PALM'
   | 'FIST'
-  | 'PEACE'
-  | 'TWO_HAND_HOLD'
-  | 'TWO_HAND_EXPAND';
+  | 'TWO_HAND_SCALE'
+  | 'TWO_HAND_ROTATE';
+
+export interface GestureEvent {
+  type: GestureType;
+  timestamp: number;
+  confidence: number;
+  pointerPosition?: { screenX: number; screenY: number };
+  swipeVelocity?: number;
+  scaleFactor?: number;
+  rotationAngle?: number;
+}
 
 export interface GestureMetrics {
-  primaryGesture: HandGestureType;
-  secondaryGesture?: HandGestureType;
-  pinchDistance: number; // Normalized 0..1
+  primaryGesture: GestureType;
   isPinching: boolean;
-  twoHandDistance: number; // Distance between index tips or palm centers (normalized)
-  twoHandAngle: number; // Radians
-  twoHandMidpoint: { x: number; y: number; screenX: number; screenY: number };
+  isPointing: boolean;
+  isOpenPalm: boolean;
+  isFist: boolean;
+  pinchDistance: number;
   spread: number;
-  overallVelocity: number;
+  pointerPosition: { screenX: number; screenY: number };
+  twoHandDistance: number;
+  twoHandAngle: number;
+  twoHandMidpoint: { screenX: number; screenY: number };
+  swipeDirection: 'LEFT' | 'RIGHT' | 'NONE';
+  swipeVelocity: number;
 }
