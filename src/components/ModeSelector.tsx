@@ -17,64 +17,75 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
   activeMode, showDebug, onSelectMode, onStartTour, onOpenCalibration, onOpenSettings, onToggleDebug
 }) => {
   const [isMuted, setIsMuted] = useState(audioService.getIsMuted());
+  const toggleMute = () => setIsMuted(audioService.toggleMute());
 
-  const handleToggleMute = () => {
-    setIsMuted(audioService.toggleMute());
-  };
-
-  const btnBase: React.CSSProperties = {
-    display:"flex", alignItems:"center", gap:"0.4rem",
-    padding:"0.4rem 0.85rem", borderRadius:"0.6rem", border:"none",
-    cursor:"pointer", fontFamily:"monospace", fontSize:"0.7rem",
-    fontWeight:"bold", transition:"all 0.15s", whiteSpace:"nowrap" as const
-  };
-
-  const modeBtn = (mode: AppMode, label: string, icon: React.ReactNode, activeColor: string, activeShadow: string): React.ReactNode => {
+  const modeBtn = (
+    mode: AppMode, label: string, icon: React.ReactNode,
+    activeBg: string, activeShadow: string, activeColor = "#fff"
+  ) => {
     const isActive = activeMode === mode;
     return (
-      <button onClick={() => { audioService.playClickSound(); onSelectMode(mode); }}
-        style={{ ...btnBase, background: isActive ? activeColor : "transparent", color: isActive ? (mode==="PRESENTATION"?"#000":"#fff") : "rgba(255,255,255,0.75)", boxShadow: isActive ? activeShadow : "none", transform: isActive ? "scale(1.04)" : "none" }}>
+      <button
+        onClick={() => { audioService.playClickSound(); onSelectMode(mode); }}
+        style={{
+          display:"flex", alignItems:"center", gap:"0.35rem",
+          padding:"0.45rem 0.9rem", borderRadius:"0.6rem", border:"none",
+          cursor:"pointer", fontFamily:"monospace", fontSize:"0.72rem", fontWeight:700,
+          transition:"all 0.15s", whiteSpace:"nowrap" as const,
+          background: isActive ? activeBg : "transparent",
+          color: isActive ? activeColor : "rgba(255,255,255,0.7)",
+          boxShadow: isActive ? activeShadow : "none",
+          transform: isActive ? "scale(1.04)" : "none",
+        }}>
         {icon}{label}
       </button>
     );
   };
 
-  const iconBtn = (onClick: () => void, icon: React.ReactNode, title: string, highlight = false): React.ReactNode => (
+  const iconBtn = (onClick: () => void, icon: React.ReactNode, title: string, active = false) => (
     <button onClick={onClick} title={title}
-      style={{ ...btnBase, padding:"0.4rem 0.5rem", background: highlight ? "rgba(0,245,255,0.15)" : "transparent", color: highlight ? "#67e8f9" : "rgba(255,255,255,0.65)", border: highlight ? "1px solid rgba(0,245,255,0.35)" : "none" }}>
+      style={{ padding:"0.45rem 0.5rem", borderRadius:"0.6rem", border: active ? "1px solid rgba(0,245,255,0.4)" : "none", background: active ? "rgba(0,245,255,0.12)" : "transparent", color: active ? "#67e8f9" : "rgba(255,255,255,0.6)", cursor:"pointer", display:"flex", alignItems:"center", transition:"all 0.15s" }}>
       {icon}
     </button>
   );
 
   return (
-    <header style={{ display:"flex", alignItems:"center", gap:"0.5rem", background:"rgba(0,0,0,0.95)", backdropFilter:"blur(24px)", border:"2px solid rgba(255,255,255,0.22)", padding:"0.4rem 0.85rem", borderRadius:"1rem", boxShadow:"0 15px 35px rgba(0,0,0,0.9)", userSelect:"none", maxWidth:"95vw", flexWrap:"wrap" }}>
+    <nav style={{
+      display:"flex", alignItems:"center", gap:"0.5rem", flexWrap:"wrap",
+      background:"rgba(2,2,4,0.96)", backdropFilter:"blur(24px)",
+      border:"1.5px solid rgba(255,255,255,0.18)",
+      padding:"0.45rem 0.9rem", borderRadius:"1rem",
+      boxShadow:"0 8px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)",
+      userSelect:"none", maxWidth:"95vw"
+    }}>
 
       {/* Logo */}
-      <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", paddingRight:"0.75rem", borderRight:"1px solid rgba(255,255,255,0.18)", fontFamily:"monospace", fontSize:"0.7rem", fontWeight:900, letterSpacing:"0.12em", color:"#00f5ff" }}>
-        <div style={{ width:9, height:9, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 10px #00f5ff" }} />
-        HANDFLUX
+      <div style={{ display:"flex", alignItems:"center", gap:"0.45rem", paddingRight:"0.75rem", borderRight:"1px solid rgba(255,255,255,0.15)", fontFamily:"monospace", fontSize:"0.72rem", fontWeight:900, letterSpacing:"0.14em", color:"#00f5ff", whiteSpace:"nowrap" }}>
+        <div style={{ width:8, height:8, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 10px #00f5ff" }} />
+        HAND FLUX
       </div>
 
       {/* Mode buttons */}
-      <div style={{ display:"flex", gap:"0.25rem" }}>
-        {modeBtn("PRESENTATION", "PRESENTATION", <Presentation size={14}/>, "#06b6d4", "0 0 15px rgba(0,245,255,0.7)")}
-        {modeBtn("VIEWER_3D",    "3D MOLECULE",  <Atom size={14}/>,         "#9333ea", "0 0 15px rgba(147,51,234,0.7)")}
-        {modeBtn("AR_LAB",       "AR VISUAL LAB",<Sparkles size={14}/>,     "#db2777", "0 0 15px rgba(236,72,153,0.7)")}
+      <div style={{ display:"flex", alignItems:"center", gap:"0.2rem" }}>
+        {modeBtn("PRESENTATION", "PRESENTATION", <Presentation size={14}/>, "#06b6d4", "0 0 18px rgba(6,182,212,0.65)", "#000")}
+        {modeBtn("VIEWER_3D",    "3D MOLECULE",  <Atom size={14}/>,         "#9333ea", "0 0 18px rgba(147,51,234,0.65)")}
+        {modeBtn("AR_LAB",       "AR VISUAL LAB",<Sparkles size={14}/>,     "#db2777", "0 0 18px rgba(219,39,119,0.65)")}
       </div>
 
-      <div style={{ width:1, height:22, background:"rgba(255,255,255,0.18)" }} />
+      <div style={{ width:1, height:22, background:"rgba(255,255,255,0.15)", flexShrink:0 }} />
 
-      {/* Utility buttons */}
-      <div style={{ display:"flex", gap:"0.15rem" }}>
-        <button onClick={() => { audioService.playClickSound(); onStartTour(); }}
-          style={{ ...btnBase, background:"linear-gradient(135deg,#ec4899,#e11d48)", color:"#fff", boxShadow:"0 0 15px rgba(244,63,94,0.55)" }}>
+      {/* Actions */}
+      <div style={{ display:"flex", alignItems:"center", gap:"0.15rem" }}>
+        <button
+          onClick={() => { audioService.playClickSound(); onStartTour(); }}
+          style={{ display:"flex", alignItems:"center", gap:"0.35rem", padding:"0.45rem 0.8rem", background:"linear-gradient(135deg,#ec4899,#e11d48)", border:"none", borderRadius:"0.6rem", color:"#fff", fontFamily:"monospace", fontSize:"0.72rem", fontWeight:700, cursor:"pointer", boxShadow:"0 0 15px rgba(244,63,94,0.5)", whiteSpace:"nowrap" }}>
           <PlayCircle size={14}/> TOUR
         </button>
-        {iconBtn(handleToggleMute, isMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>, isMuted?"Unmute":"Mute", !isMuted)}
+        {iconBtn(toggleMute, isMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>, isMuted ? "Unmute" : "Mute", !isMuted)}
         {iconBtn(onToggleDebug, <Activity size={15}/>, "Performance HUD (D)", showDebug)}
         {iconBtn(onOpenCalibration, <HelpCircle size={15}/>, "Calibration")}
         {iconBtn(onOpenSettings, <Settings size={15}/>, "Settings")}
       </div>
-    </header>
+    </nav>
   );
 };
