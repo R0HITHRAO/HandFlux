@@ -9,39 +9,44 @@ export class HandLandmarkerService {
   private prevLandmarks: Map<string, Landmark2D[]> = new Map();
   private prevTime: number = 0;
 
-  // Fast Offscreen Downscale Canvas (480x270) to accelerate GPU texture transfer by 4x
-  private procCanvas: HTMLCanvasElement | null = null;
-  private procCtx: CanvasRenderingContext2D | null = null;
-  private procWidth: number = 480;
-  private procHeight: number = 270;
-
   public async initialize(): Promise<void> {
     try {
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
       );
 
-      this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-          delegate: 'GPU'
-        },
-        runningMode: 'VIDEO',
-        numHands: 2,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-
-      this.procCanvas = document.createElement('canvas');
-      this.procCanvas.width = this.procWidth;
-      this.procCanvas.height = this.procHeight;
-      this.procCtx = this.procCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
+      try {
+        // Try GPU delegate first
+        this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'VIDEO',
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+      } catch (gpuErr) {
+        console.warn('GPU delegate fallback to CPU:', gpuErr);
+        this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            delegate: 'CPU'
+          },
+          runningMode: 'VIDEO',
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+      }
 
       this.isLoaded = true;
-      console.log('High-Efficiency MediaPipe HandLandmarker Initialized.');
+      console.log('[HandLandmarkerService] Vision model loaded successfully.');
     } catch (err) {
-      console.warn('MediaPipe initialization fallback:', err);
+      console.warn('[HandLandmarkerService] Failed to load MediaPipe vision model:', err);
       this.isLoaded = false;
     }
   }
@@ -52,19 +57,12 @@ export class HandLandmarkerService {
     screenWidth: number,
     screenHeight: number
   ): HandLandmarks[] {
-    if (!this.isLoaded || !this.handLandmarker || video.readyState < 2) {
+    if (!this.isLoaded || !this.handLandmarker || video.readyState < 2 || video.videoWidth === 0) {
       return [];
     }
 
     try {
-      // Fast downscale frame transfer
-      let sourceTarget: HTMLVideoElement | HTMLCanvasElement = video;
-      if (this.procCanvas && this.procCtx) {
-        this.procCtx.drawImage(video, 0, 0, this.procWidth, this.procHeight);
-        sourceTarget = this.procCanvas;
-      }
-
-      const result = this.handLandmarker.detectForVideo(sourceTarget, timestamp);
+      const result = this.handLandmarker.detectForVideo(video, timestamp);
       if (!result || !result.landmarks || result.landmarks.length === 0) {
         return [];
       }
@@ -107,7 +105,6 @@ export class HandLandmarkerService {
           };
         }
 
-        // Fast Velocity Calculation
         let vx = 0, vy = 0, speed = 0;
         const prev = this.prevLandmarks.get(id);
         const dt = Math.max((timestamp - this.prevTime) * 0.001, 0.001);
@@ -160,7 +157,7 @@ export class HandLandmarkerService {
       this.prevTime = timestamp;
       return hands;
     } catch (e) {
-      console.warn('MediaPipe fast detect error:', e);
+      console.warn('[HandLandmarkerService] detectHands error:', e);
       return [];
     }
   }
