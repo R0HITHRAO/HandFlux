@@ -12,15 +12,18 @@ HandFlux transforms standard consumer webcams into zero-latency, touchless input
 - **Index Pointer**: Virtual laser pointer projection with smooth OneEuro motion filtering.
 - **Directional Swipe Navigation**: Velocity-confirmed horizontal swipe recognition for slide transitions.
 - **Gesture Confirmation**: Edge-triggered pinch to select/click, fist to pause interaction.
+- **Tactile Web Audio**: Synthesized aerodynamic sound effects on slide transitions.
 
 ### 2. 🧬 3D Molecular Exploration
-- **Interactive PBR Molecular Viewer**: High-fidelity ball-and-stick Caffeine ($C_8H_{10}N_4O_2$) structure.
+- **Multi-Molecule Catalog**: Real-time switching between **Caffeine** ($C_8H_{10}N_4O_2$), **Benzene** ($C_6H_6$), **Ethanol** ($C_2H_6O$), and **Water** ($H_2O$).
 - **6-DOF Spatial Manipulation**: Single-hand pinch grab and translation; two-hand distance-based scaling and orientation rotation.
-- **Element Raycast Inspection**: Real-time hover inspection displaying atomic number, hybridization, valence, and Van der Waals radii.
+- **Element Raycast Inspection**: Real-time hover inspection displaying atomic number, hybridization, valence, and Van der Waals radii with crystal chime audio feedback.
+- **Dual Fallbacks**: Full mouse-drag rotation, atom hover inspect, and keyboard shortcuts for accessibility.
 
 ### 3. 📐 AR Visual Lab
-- **Event-Driven Shape Spawning**: On-demand procedural WebGL PRISM, laser HATCH digital planes, and GLSL shaders.
+- **Event-Driven Shape Spawning**: On-demand procedural WebGL PRISM, laser HATCH digital planes, BLOCKS, WEDGES, DOTS, and GLSL shaders.
 - **Face Avoidance System**: Spatial bounding heuristics ensure spawned geometry never obscures the user's face.
+- **Digital Spawn Audio**: High-tech tactile spawn audio cues on object creation.
 
 ---
 
