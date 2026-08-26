@@ -1,7 +1,7 @@
-import React from 'react';
-import { Slide } from './PresentationController';
-import { GestureMetrics } from '../types/gestures';
-import { ChevronLeft, ChevronRight, Hand, Sparkles } from 'lucide-react';
+import React from "react";
+import { Slide } from "./PresentationController";
+import { GestureMetrics } from "../types/gestures";
+import { ChevronLeft, ChevronRight, Hand } from "lucide-react";
 
 interface PresentationViewProps {
   slide: Slide;
@@ -14,117 +14,84 @@ interface PresentationViewProps {
 }
 
 export const PresentationView: React.FC<PresentationViewProps> = ({
-  slide,
-  currentIndex,
-  totalSlides,
-  gestures,
-  onPrev,
-  onNext,
-  onSelectSlide
+  slide, currentIndex, totalSlides, gestures, onPrev, onNext, onSelectSlide
 }) => {
-  const isSwipeActive = gestures.swipeDirection !== 'NONE';
-  const pointerX = gestures.pointerPosition.screenX;
-  const pointerY = gestures.pointerPosition.screenY;
+  const pX = gestures.pointerPosition.screenX;
+  const pY = gestures.pointerPosition.screenY;
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none p-6 select-none flex flex-col justify-between overflow-hidden">
-      {/* Virtual Laser Pointer (Follows Index Tip) */}
+    <>
+      {/* Laser Pointer � rendered fixed over entire screen */}
       {gestures.isPointing && (
-        <div
-          className="absolute pointer-events-none z-50 transition-transform duration-75"
-          style={{ transform: `translate(${pointerX - 12}px, ${pointerY - 12}px)` }}
-        >
-          <div className="w-6 h-6 rounded-full bg-red-500/70 border border-red-300 shadow-[0_0_20px_#ff0055] animate-ping absolute inset-0" />
-          <div className="w-6 h-6 rounded-full bg-red-600 border-2 border-white shadow-[0_0_14px_#ff0000] flex items-center justify-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-          </div>
-          <div className="absolute top-7 left-3 bg-red-950/95 border border-red-500/80 px-2 py-0.5 rounded text-[9px] font-mono text-red-200 shadow-xl whitespace-nowrap">
-            LASER POINTER
-          </div>
-        </div>
-      )}
-
-      {/* Swipe Feedback Banner */}
-      {isSwipeActive && (
-        <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-center pointer-events-none z-40 animate-out fade-out duration-500">
-          <div className="px-8 py-4 bg-cyan-950/95 border-2 border-cyan-400 rounded-3xl backdrop-blur-2xl shadow-[0_0_50px_#00f5ff] text-cyan-200 font-mono font-black text-xl flex items-center space-x-3 animate-bounce">
-            <Sparkles className="w-6 h-6 text-cyan-400" />
-            <span>{gestures.swipeDirection === 'LEFT' ? '◀ NEXT SLIDE' : 'PREVIOUS SLIDE ▶'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Top Right Header Indicator */}
-      <div className="flex justify-end pt-14 pr-2 pointer-events-auto">
-        <div className="flex items-center space-x-3 bg-black/95 backdrop-blur-2xl border-2 border-cyan-500/40 px-4 py-2 rounded-2xl shadow-2xl text-xs font-mono">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00f5ff]" />
-          <span className="text-cyan-300 font-bold">{slide.category}</span>
-          <span className="text-white/40">|</span>
-          <span className="text-white/90 font-bold">SLIDE {currentIndex + 1} / {totalSlides}</span>
-        </div>
-      </div>
-
-      {/* Main Slide Card: DOCKED ON THE RIGHT SIDE */}
-      <div className="max-w-md w-full ml-auto bg-black/95 backdrop-blur-2xl border-2 border-cyan-500/50 rounded-3xl p-6 shadow-[0_25px_60px_rgba(0,0,0,0.95)] space-y-4 pointer-events-auto my-auto">
-        <div className="border-b border-white/15 pb-3">
-          <div className="text-[10px] font-mono text-cyan-400 font-bold tracking-wider mb-1.5 uppercase">{slide.techBadge}</div>
-          <h1 className="text-2xl font-black text-white tracking-tight leading-tight">{slide.title}</h1>
-          <p className="text-xs font-mono text-cyan-200/90 mt-1 font-semibold">{slide.subtitle}</p>
-        </div>
-
-        <div className="space-y-3">
-          {slide.bullets.map((bullet, i) => (
-            <div key={i} className="flex items-start space-x-3">
-              <div className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0 shadow-[0_0_8px_#00f5ff]" />
-              <p className="text-xs text-white leading-relaxed font-sans font-medium">{bullet}</p>
+        <div style={{ position:"fixed", left:0, top:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:8500 }}>
+          <div style={{ position:"absolute", transform:`translate(${pX-12}px,${pY-12}px)`, width:24, height:24 }}>
+            <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:"rgba(255,0,85,0.6)", border:"1px solid #fca5a5", boxShadow:"0 0 20px #ff0055", animation:"ping 1s infinite" }} />
+            <div style={{ position:"relative", width:24, height:24, borderRadius:"50%", background:"#dc2626", border:"2px solid #fff", boxShadow:"0 0 14px #ff0000", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:"#fff" }} />
             </div>
-          ))}
-        </div>
-
-        {/* Gesture Cue Bar */}
-        <div className="flex items-center justify-between pt-3 border-t border-white/15 text-[11px] font-mono text-white/80">
-          <div className="flex items-center space-x-1.5 text-cyan-300">
-            <Hand className="w-3.5 h-3.5" />
-            <span>Swipe Hand ◀ / ▶ • Point index</span>
           </div>
-          <span className="text-pink-400 font-bold">TOUCHLESS</span>
         </div>
-      </div>
+      )}
 
-      {/* Bottom Navigation Toolbar */}
-      <div className="flex items-center justify-end space-x-3 pointer-events-auto ml-auto pb-2 pr-2">
-        <button
-          onClick={onPrev}
-          disabled={currentIndex === 0}
-          className="p-3 bg-black/95 hover:bg-black border-2 border-white/30 rounded-2xl text-white disabled:opacity-25 disabled:pointer-events-none transition-transform active:scale-90 shadow-2xl flex items-center justify-center"
-          title="Previous Slide (Swipe Right / Left Arrow)"
-        >
-          <ChevronLeft className="w-5 h-5 text-cyan-300" />
-        </button>
+      {/* Slide Panel � self-contained card, fills the parent wrapper */}
+      <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem", height:"100%", paddingTop:"0.5rem" }}>
 
-        <div className="flex space-x-1.5 bg-black/95 backdrop-blur-2xl px-4 py-3 rounded-2xl border-2 border-white/25 shadow-2xl">
-          {Array.from({ length: totalSlides }).map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => onSelectSlide(idx)}
-              className={`h-2.5 rounded-full transition-all duration-200 ${
-                idx === currentIndex
-                  ? 'bg-cyan-400 w-7 shadow-[0_0_12px_#00f5ff]'
-                  : 'bg-white/30 hover:bg-white/70 w-2.5'
-              }`}
-            />
-          ))}
+        {/* Slide counter badge */}
+        <div style={{ display:"flex", justifyContent:"flex-end" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", background:"rgba(0,0,0,0.95)", border:"1.5px solid rgba(0,245,255,0.4)", borderRadius:"0.75rem", padding:"0.35rem 0.75rem", fontFamily:"monospace", fontSize:"0.7rem" }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 8px #00f5ff", display:"inline-block" }} />
+            <span style={{ color:"#67e8f9", fontWeight:"bold" }}>{slide.category}</span>
+            <span style={{ color:"rgba(255,255,255,0.3)" }}>|</span>
+            <span style={{ color:"#fff", fontWeight:"bold" }}>SLIDE {currentIndex + 1} / {totalSlides}</span>
+          </div>
         </div>
 
-        <button
-          onClick={onNext}
-          disabled={currentIndex === totalSlides - 1}
-          className="p-3 bg-black/95 hover:bg-black border-2 border-white/30 rounded-2xl text-white disabled:opacity-25 disabled:pointer-events-none transition-transform active:scale-90 shadow-2xl flex items-center justify-center"
-          title="Next Slide (Swipe Left / Right Arrow)"
-        >
-          <ChevronRight className="w-5 h-5 text-cyan-300" />
-        </button>
+        {/* Main slide card */}
+        <div style={{ flex:1, background:"rgba(0,0,0,0.95)", backdropFilter:"blur(24px)", border:"2px solid rgba(0,245,255,0.4)", borderRadius:"1.25rem", padding:"1.25rem", boxShadow:"0 25px 60px rgba(0,0,0,0.95)", overflowY:"auto", display:"flex", flexDirection:"column", gap:"0.75rem" }}>
+          <div style={{ borderBottom:"1px solid rgba(255,255,255,0.12)", paddingBottom:"0.75rem" }}>
+            <div style={{ fontSize:"0.65rem", fontFamily:"monospace", color:"#00f5ff", fontWeight:"bold", letterSpacing:"0.1em", marginBottom:"0.4rem", textTransform:"uppercase" }}>{slide.techBadge}</div>
+            <h1 style={{ margin:0, fontSize:"1.3rem", fontWeight:900, color:"#fff", lineHeight:1.2 }}>{slide.title}</h1>
+            <p style={{ margin:"0.3rem 0 0", fontSize:"0.72rem", fontFamily:"monospace", color:"rgba(103,232,249,0.9)", fontWeight:600 }}>{slide.subtitle}</p>
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:"0.5rem" }}>
+            {slide.bullets.map((b, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:"0.6rem" }}>
+                <div style={{ width:7, height:7, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 8px #00f5ff", flexShrink:0, marginTop:4 }} />
+                <p style={{ margin:0, fontSize:"0.72rem", color:"#fff", lineHeight:1.5 }}>{b}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop:"auto", paddingTop:"0.75rem", borderTop:"1px solid rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"space-between", fontFamily:"monospace", fontSize:"0.68rem" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", color:"#67e8f9" }}>
+              <Hand size={13} />
+              <span>Swipe hand ? / ? to navigate</span>
+            </div>
+            <span style={{ color:"#f472b6", fontWeight:"bold" }}>TOUCHLESS</span>
+          </div>
+        </div>
+
+        {/* Nav row */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:"0.5rem" }}>
+          <button onClick={onPrev} disabled={currentIndex === 0}
+            style={{ padding:"0.5rem", background:"rgba(0,0,0,0.95)", border:"2px solid rgba(255,255,255,0.25)", borderRadius:"0.75rem", cursor:currentIndex===0?"not-allowed":"pointer", opacity:currentIndex===0?0.25:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <ChevronLeft size={18} color="#67e8f9" />
+          </button>
+
+          <div style={{ display:"flex", gap:"0.35rem", background:"rgba(0,0,0,0.95)", padding:"0.6rem 0.75rem", borderRadius:"0.75rem", border:"1.5px solid rgba(255,255,255,0.2)" }}>
+            {Array.from({ length: totalSlides }).map((_, idx) => (
+              <button key={idx} onClick={() => onSelectSlide(idx)}
+                style={{ height:9, width:idx===currentIndex?28:9, borderRadius:9, border:"none", cursor:"pointer", background:idx===currentIndex?"#00f5ff":"rgba(255,255,255,0.25)", boxShadow:idx===currentIndex?"0 0 12px #00f5ff":"none", transition:"all 0.2s", padding:0 }} />
+            ))}
+          </div>
+
+          <button onClick={onNext} disabled={currentIndex === totalSlides - 1}
+            style={{ padding:"0.5rem", background:"rgba(0,0,0,0.95)", border:"2px solid rgba(255,255,255,0.25)", borderRadius:"0.75rem", cursor:currentIndex===totalSlides-1?"not-allowed":"pointer", opacity:currentIndex===totalSlides-1?0.25:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <ChevronRight size={18} color="#67e8f9" />
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 };

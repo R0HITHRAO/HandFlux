@@ -1,6 +1,6 @@
-import React from 'react';
-import { VisualEffectState, EFFECT_CONFIGS } from '../types/effects';
-import { PlusCircle, Trash2, RotateCcw } from 'lucide-react';
+import React from "react";
+import { VisualEffectState, EFFECT_CONFIGS } from "../types/effects";
+import { PlusCircle, Trash2, RotateCcw } from "lucide-react";
 
 interface ControlBarProps {
   activeTool: VisualEffectState;
@@ -18,76 +18,60 @@ interface ControlBarProps {
 }
 
 export const ControlBar: React.FC<ControlBarProps> = ({
-  activeTool,
-  objectCount,
-  onSelectTool,
-  onCreateObject,
-  onDeleteSelected,
-  onClearAll,
+  activeTool, objectCount, onSelectTool, onCreateObject, onDeleteSelected, onClearAll
 }) => {
-  const toolConfigs = [
-    { type: VisualEffectState.RECTANGLE_TRACKING, label: '📐 HATCH' },
-    { type: VisualEffectState.PURPLE_PRISM, label: '💎 PRISM' },
-    { type: VisualEffectState.TRIANGLE_EFFECT, label: '🔺 WEDGES' },
-    { type: VisualEffectState.GLOW_BLOCKS, label: '🧊 BLOCKS' },
-    { type: VisualEffectState.RECTANGLE_DOTS, label: '✨ DOTS' },
-    { type: VisualEffectState.LARGE_GEOMETRY, label: '📦 3D FOLD' }
+  const tools = [
+    { type: VisualEffectState.RECTANGLE_TRACKING, label: "HATCH"  },
+    { type: VisualEffectState.PURPLE_PRISM,        label: "PRISM"  },
+    { type: VisualEffectState.TRIANGLE_EFFECT,     label: "WEDGES" },
+    { type: VisualEffectState.GLOW_BLOCKS,         label: "BLOCKS" },
+    { type: VisualEffectState.RECTANGLE_DOTS,      label: "DOTS"   },
+    { type: VisualEffectState.LARGE_GEOMETRY,      label: "3D FOLD"},
   ];
 
-  const toolName = EFFECT_CONFIGS[activeTool]?.name || 'NONE';
+  const toolName = EFFECT_CONFIGS[activeTool]?.name || "";
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center space-y-2 pointer-events-auto max-w-[95vw]">
-      {/* Tool Selector Buttons */}
-      <div className="flex flex-wrap items-center justify-center gap-2 p-2 bg-black/90 backdrop-blur-2xl border-2 border-white/20 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)]">
-        {toolConfigs.map(({ type, label }) => {
-          const isSelected = activeTool === type;
-          return (
-            <button
-              key={type}
-              onClick={() => onSelectTool(isSelected ? VisualEffectState.NONE : type)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold transition-all ${
-                isSelected
-                  ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,245,255,0.7)] scale-105'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <span>{label}</span>
-            </button>
-          );
-        })}
+    <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"center", gap:"0.5rem", background:"rgba(0,0,0,0.9)", backdropFilter:"blur(24px)", border:"2px solid rgba(255,255,255,0.18)", borderRadius:"1rem", padding:"0.6rem 0.9rem", boxShadow:"0 20px 50px rgba(0,0,0,0.9)", maxWidth:"95vw" }}>
 
-        <div className="w-[1px] h-6 bg-white/20 mx-1" />
+      {/* Tool buttons */}
+      {tools.map(({ type, label }) => {
+        const active = activeTool === type;
+        return (
+          <button key={type} onClick={() => onSelectTool(active ? VisualEffectState.NONE : type)}
+            style={{ padding:"0.4rem 0.75rem", borderRadius:"0.6rem", border:"none", cursor:"pointer", fontFamily:"monospace", fontSize:"0.7rem", fontWeight:"bold", transition:"all 0.15s",
+              background: active ? "#06b6d4" : "rgba(255,255,255,0.1)",
+              color: active ? "#000" : "rgba(255,255,255,0.8)",
+              boxShadow: active ? "0 0 15px rgba(0,245,255,0.7)" : "none",
+              transform: active ? "scale(1.05)" : "none"
+            }}>
+            {label}
+          </button>
+        );
+      })}
 
-        {/* Create Button */}
-        <button
-          onClick={onCreateObject}
-          className="px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 shadow-[0_0_15px_rgba(244,63,94,0.6)] active:scale-95 transition-transform"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>CREATE {toolName !== 'NONE' ? toolName : ''}</span>
-        </button>
+      <div style={{ width:1, height:24, background:"rgba(255,255,255,0.18)", margin:"0 0.25rem" }} />
 
-        {/* Delete Button */}
-        <button
-          onClick={onDeleteSelected}
-          disabled={objectCount === 0}
-          className="px-3.5 py-2 bg-red-950/80 hover:bg-red-900 text-red-200 disabled:opacity-30 disabled:pointer-events-none border border-red-500/40 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>DELETE</span>
-        </button>
+      {/* Create */}
+      <button onClick={onCreateObject}
+        style={{ display:"flex", alignItems:"center", gap:"0.4rem", padding:"0.45rem 0.9rem", background:"linear-gradient(135deg,#ec4899,#e11d48)", border:"none", borderRadius:"0.6rem", color:"#fff", fontFamily:"monospace", fontSize:"0.7rem", fontWeight:"bold", cursor:"pointer", boxShadow:"0 0 15px rgba(244,63,94,0.6)", transition:"transform 0.1s" }}>
+        <PlusCircle size={14} />
+        CREATE {toolName}
+      </button>
 
-        {/* Clear Button */}
-        <button
-          onClick={onClearAll}
-          disabled={objectCount === 0}
-          className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white/80 disabled:opacity-30 disabled:pointer-events-none rounded-xl text-xs font-mono flex items-center space-x-1.5 transition-all"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>CLEAR ({objectCount})</span>
-        </button>
-      </div>
+      {/* Delete */}
+      <button onClick={onDeleteSelected} disabled={objectCount===0}
+        style={{ display:"flex", alignItems:"center", gap:"0.35rem", padding:"0.45rem 0.75rem", background:"rgba(60,0,0,0.8)", border:"1px solid rgba(239,68,68,0.4)", borderRadius:"0.6rem", color:"#fca5a5", fontFamily:"monospace", fontSize:"0.7rem", fontWeight:"bold", cursor:objectCount===0?"not-allowed":"pointer", opacity:objectCount===0?0.3:1 }}>
+        <Trash2 size={13} />
+        DELETE
+      </button>
+
+      {/* Clear */}
+      <button onClick={onClearAll} disabled={objectCount===0}
+        style={{ display:"flex", alignItems:"center", gap:"0.35rem", padding:"0.45rem 0.75rem", background:"rgba(255,255,255,0.08)", border:"none", borderRadius:"0.6rem", color:"rgba(255,255,255,0.75)", fontFamily:"monospace", fontSize:"0.7rem", cursor:objectCount===0?"not-allowed":"pointer", opacity:objectCount===0?0.3:1 }}>
+        <RotateCcw size={13} />
+        CLEAR ({objectCount})
+      </button>
     </div>
   );
 };

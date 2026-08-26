@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { AppMode } from '../types/gestures';
-import { Presentation, Atom, Sparkles, PlayCircle, Settings, HelpCircle, Activity, Volume2, VolumeX } from 'lucide-react';
-import { audioService } from '../utils/audioService';
+import React, { useState } from "react";
+import { AppMode } from "../types/gestures";
+import { Presentation, Atom, Sparkles, PlayCircle, Settings, HelpCircle, Activity, Volume2, VolumeX } from "lucide-react";
+import { audioService } from "../utils/audioService";
 
 interface ModeSelectorProps {
   activeMode: AppMode;
@@ -14,112 +14,66 @@ interface ModeSelectorProps {
 }
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({
-  activeMode,
-  showDebug,
-  onSelectMode,
-  onStartTour,
-  onOpenCalibration,
-  onOpenSettings,
-  onToggleDebug
+  activeMode, showDebug, onSelectMode, onStartTour, onOpenCalibration, onOpenSettings, onToggleDebug
 }) => {
   const [isMuted, setIsMuted] = useState(audioService.getIsMuted());
 
   const handleToggleMute = () => {
-    const muted = audioService.toggleMute();
-    setIsMuted(muted);
+    setIsMuted(audioService.toggleMute());
   };
 
+  const btnBase: React.CSSProperties = {
+    display:"flex", alignItems:"center", gap:"0.4rem",
+    padding:"0.4rem 0.85rem", borderRadius:"0.6rem", border:"none",
+    cursor:"pointer", fontFamily:"monospace", fontSize:"0.7rem",
+    fontWeight:"bold", transition:"all 0.15s", whiteSpace:"nowrap" as const
+  };
+
+  const modeBtn = (mode: AppMode, label: string, icon: React.ReactNode, activeColor: string, activeShadow: string): React.ReactNode => {
+    const isActive = activeMode === mode;
+    return (
+      <button onClick={() => { audioService.playClickSound(); onSelectMode(mode); }}
+        style={{ ...btnBase, background: isActive ? activeColor : "transparent", color: isActive ? (mode==="PRESENTATION"?"#000":"#fff") : "rgba(255,255,255,0.75)", boxShadow: isActive ? activeShadow : "none", transform: isActive ? "scale(1.04)" : "none" }}>
+        {icon}{label}
+      </button>
+    );
+  };
+
+  const iconBtn = (onClick: () => void, icon: React.ReactNode, title: string, highlight = false): React.ReactNode => (
+    <button onClick={onClick} title={title}
+      style={{ ...btnBase, padding:"0.4rem 0.5rem", background: highlight ? "rgba(0,245,255,0.15)" : "transparent", color: highlight ? "#67e8f9" : "rgba(255,255,255,0.65)", border: highlight ? "1px solid rgba(0,245,255,0.35)" : "none" }}>
+      {icon}
+    </button>
+  );
+
   return (
-    <header style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'rgba(0,0,0,0.95)', backdropFilter:'blur(24px)', border:'2px solid rgba(255,255,255,0.25)', padding:'0.5rem 1rem', borderRadius:'1rem', boxShadow:'0 15px 35px rgba(0,0,0,0.9)', pointerEvents:'auto', userSelect:'none', maxWidth:'95vw', whiteSpace:'nowrap' }}>
-      {/* Project Logo */}
-      <div className="px-3 py-1 text-xs font-mono font-black tracking-widest text-cyan-400 border-r border-white/20 flex items-center space-x-2">
-        <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00f5ff]" />
-        <span>HANDFLUX</span>
+    <header style={{ display:"flex", alignItems:"center", gap:"0.5rem", background:"rgba(0,0,0,0.95)", backdropFilter:"blur(24px)", border:"2px solid rgba(255,255,255,0.22)", padding:"0.4rem 0.85rem", borderRadius:"1rem", boxShadow:"0 15px 35px rgba(0,0,0,0.9)", userSelect:"none", maxWidth:"95vw", flexWrap:"wrap" }}>
+
+      {/* Logo */}
+      <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", paddingRight:"0.75rem", borderRight:"1px solid rgba(255,255,255,0.18)", fontFamily:"monospace", fontSize:"0.7rem", fontWeight:900, letterSpacing:"0.12em", color:"#00f5ff" }}>
+        <div style={{ width:9, height:9, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 10px #00f5ff" }} />
+        HANDFLUX
       </div>
 
-      {/* Mode Switches */}
-      <nav className="flex items-center space-x-2">
-        <button
-          onClick={() => { audioService.playClickSound(); onSelectMode('PRESENTATION'); }}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
-            activeMode === 'PRESENTATION'
-              ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,245,255,0.7)] scale-105'
-              : 'text-white/80 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Presentation className="w-4 h-4" />
-          <span>PRESENTATION</span>
-        </button>
+      {/* Mode buttons */}
+      <div style={{ display:"flex", gap:"0.25rem" }}>
+        {modeBtn("PRESENTATION", "PRESENTATION", <Presentation size={14}/>, "#06b6d4", "0 0 15px rgba(0,245,255,0.7)")}
+        {modeBtn("VIEWER_3D",    "3D MOLECULE",  <Atom size={14}/>,         "#9333ea", "0 0 15px rgba(147,51,234,0.7)")}
+        {modeBtn("AR_LAB",       "AR VISUAL LAB",<Sparkles size={14}/>,     "#db2777", "0 0 15px rgba(236,72,153,0.7)")}
+      </div>
 
-        <button
-          onClick={() => { audioService.playClickSound(); onSelectMode('VIEWER_3D'); }}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
-            activeMode === 'VIEWER_3D'
-              ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.7)] scale-105'
-              : 'text-white/80 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Atom className="w-4 h-4" />
-          <span>3D MOLECULE</span>
-        </button>
+      <div style={{ width:1, height:22, background:"rgba(255,255,255,0.18)" }} />
 
-        <button
-          onClick={() => { audioService.playClickSound(); onSelectMode('AR_LAB'); }}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
-            activeMode === 'AR_LAB'
-              ? 'bg-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.7)] scale-105'
-              : 'text-white/80 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>AR VISUAL LAB</span>
+      {/* Utility buttons */}
+      <div style={{ display:"flex", gap:"0.15rem" }}>
+        <button onClick={() => { audioService.playClickSound(); onStartTour(); }}
+          style={{ ...btnBase, background:"linear-gradient(135deg,#ec4899,#e11d48)", color:"#fff", boxShadow:"0 0 15px rgba(244,63,94,0.55)" }}>
+          <PlayCircle size={14}/> TOUR
         </button>
-      </nav>
-
-      <div className="w-[1px] h-6 bg-white/20" />
-
-      {/* Tour & Tools */}
-      <div className="flex items-center space-x-1.5">
-        <button
-          onClick={() => { audioService.playClickSound(); onStartTour(); }}
-          className="px-3.5 py-2 rounded-xl text-xs font-mono font-bold bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white flex items-center space-x-1.5 shadow-[0_0_15px_rgba(244,63,94,0.6)] transition-all active:scale-95"
-          title="75s Recruiter Guided Tour"
-        >
-          <PlayCircle className="w-4 h-4" />
-          <span>TOUR</span>
-        </button>
-
-        <button
-          onClick={handleToggleMute}
-          className={`p-2 rounded-xl text-xs font-mono transition-all ${!isMuted ? 'text-cyan-300 hover:bg-white/10' : 'text-red-400 hover:bg-white/10'}`}
-          title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
-        >
-          {!isMuted ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-        </button>
-
-        <button
-          onClick={onToggleDebug}
-          className={`p-2 rounded-xl text-xs font-mono transition-all ${showDebug ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-          title="Toggle Performance HUD (D)"
-        >
-          <Activity className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={onOpenCalibration}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-          title="Interface Calibration"
-        >
-          <HelpCircle className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={onOpenSettings}
-          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-          title="Settings & Privacy"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        {iconBtn(handleToggleMute, isMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>, isMuted?"Unmute":"Mute", !isMuted)}
+        {iconBtn(onToggleDebug, <Activity size={15}/>, "Performance HUD (D)", showDebug)}
+        {iconBtn(onOpenCalibration, <HelpCircle size={15}/>, "Calibration")}
+        {iconBtn(onOpenSettings, <Settings size={15}/>, "Settings")}
       </div>
     </header>
   );
