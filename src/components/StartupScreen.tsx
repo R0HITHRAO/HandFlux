@@ -1,112 +1,88 @@
-import React, { useState } from 'react';
-import { Camera, Sparkles, Cpu, Play, Video, MonitorPlay } from 'lucide-react';
+import React, { useEffect, useState } from "react";
 
 interface StartupScreenProps {
-  onStartLive: (useSimulation: boolean) => void;
-  onStartDemo: (useSimulation: boolean) => void;
+  isVisible: boolean;
 }
 
-export const StartupScreen: React.FC<StartupScreenProps> = ({ onStartLive, onStartDemo }) => {
-  const [useSimulation, setUseSimulation] = useState(false);
+const STEPS = [
+  { label: "Loading MediaPipe vision model...",  duration: 2000 },
+  { label: "Initializing WebGL GPU context...",  duration: 800  },
+  { label: "Calibrating gesture engine...",       duration: 600  },
+  { label: "Connecting webcam stream...",         duration: 400  },
+];
+
+export const StartupScreen: React.FC<StartupScreenProps> = ({ isVisible }) => {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [dots, setDots] = useState(".");
+
+  useEffect(() => {
+    if (!isVisible) return;
+    let i = 0;
+    const advance = () => {
+      i++;
+      if (i < STEPS.length) {
+        setStepIdx(i);
+        setTimeout(advance, STEPS[i].duration);
+      }
+    };
+    setTimeout(advance, STEPS[0].duration);
+
+    const dotTimer = setInterval(() => {
+      setDots(d => d.length >= 3 ? "." : d + ".");
+    }, 350);
+
+    return () => clearInterval(dotTimer);
+  }, [isVisible]);
+
+  if (!isVisible) return null;
+
+  const progress = ((stepIdx) / STEPS.length) * 100;
 
   return (
-    <div className="relative w-full h-screen flex items-center justify-center bg-black tech-grid-bg">
-      {/* Background glow */}
-      <div className="absolute w-96 h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none translate-x-32 -translate-y-24" />
-
-      <div className="relative z-10 max-w-xl w-full mx-4 p-8 glass-panel rounded-lg shadow-2xl border border-white/15">
-        {/* Header Status */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] text-emerald-400 font-mono tracking-widest uppercase">System Online</span>
-          </div>
-          <span className="text-[10px] text-white/50 font-mono">v1.0.0 / GPU PIPELINE</span>
+    <div style={{
+      position:"fixed", inset:0, zIndex:99999,
+      background:"#000",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      fontFamily:"monospace", color:"#fff",
+      gap:"1.5rem", padding:"2rem",
+    }}>
+      {/* Logo */}
+      <div style={{ textAlign:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:"0.75rem", marginBottom:"0.5rem" }}>
+          <div style={{ width:14, height:14, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 20px #00f5ff" }} />
+          <span style={{ fontSize:"2rem", fontWeight:900, letterSpacing:"0.18em", color:"#fff" }}>HANDFLUX</span>
+          <div style={{ width:14, height:14, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 20px #00f5ff" }} />
         </div>
+        <p style={{ margin:0, fontSize:"0.75rem", color:"rgba(0,245,255,0.7)", letterSpacing:"0.12em", textTransform:"uppercase" }}>
+          Touchless Human-Computer Interaction
+        </p>
+      </div>
 
-        {/* Title Card */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl sm:text-5xl font-bold font-mono tracking-wider text-white mb-2">
-            HandFlux
-          </h1>
-          <p className="text-xs sm:text-sm font-mono tracking-widest text-cyan-400 uppercase">
-            Real-Time Hand-Controlled Visual Effects
-          </p>
-          <p className="text-xs text-white/60 mt-3 max-w-md mx-auto leading-relaxed">
-            Camera-powered interactive visual effects composited over 21-landmark hand tracking with procedural 3D geometry and GLSL shaders.
-          </p>
+      {/* Progress bar */}
+      <div style={{ width:"min(360px, 80vw)" }}>
+        <div style={{ background:"rgba(255,255,255,0.07)", borderRadius:9999, height:3, overflow:"hidden", marginBottom:"0.75rem" }}>
+          <div style={{ width:`${progress}%`, height:"100%", background:"linear-gradient(90deg, #00f5ff, #9333ea)", transition:"width 0.5s ease", boxShadow:"0 0 12px #00f5ff" }} />
         </div>
-
-        {/* Capabilities Matrix */}
-        <div className="grid grid-cols-2 gap-3 mb-8 text-[11px] font-mono">
-          <div className="p-2.5 rounded bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Camera className="w-4 h-4 text-cyan-400" />
-            <div>
-              <div className="text-white/90">Mirrored Webcam</div>
-              <div className="text-[9px] text-white/40">1280x720 60FPS Target</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Cpu className="w-4 h-4 text-purple-400" />
-            <div>
-              <div className="text-white/90">MediaPipe Vision</div>
-              <div className="text-[9px] text-white/40">21 Hand Landmarks</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-pink-400" />
-            <div>
-              <div className="text-white/90">GPU Shaders</div>
-              <div className="text-[9px] text-white/40">Thermal / Halftone / Blur</div>
-            </div>
-          </div>
-          <div className="p-2.5 rounded bg-white/5 border border-white/10 flex items-center gap-2.5">
-            <MonitorPlay className="w-4 h-4 text-amber-400" />
-            <div>
-              <div className="text-white/90">Interactive AR</div>
-              <div className="text-[9px] text-white/40">Dynamic 3D Geometry</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Test Mode Toggle */}
-        <div className="mb-6 p-3 rounded bg-white/5 border border-white/10 flex items-center justify-between text-xs font-mono">
-          <span className="text-white/80">Test Mode (Synthetic Hand Motion)</span>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useSimulation}
-              onChange={(e) => setUseSimulation(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
-          </label>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => onStartLive(useSimulation)}
-            className="flex-1 py-3 px-4 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold tech-btn flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
-          >
-            <Play className="w-4 h-4 fill-current" />
-            LIVE EXPERIENCE
-          </button>
-          <button
-            onClick={() => onStartDemo(useSimulation)}
-            className="flex-1 py-3 px-4 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold tech-btn flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25"
-          >
-            <Video className="w-4 h-4" />
-            34s DEMO SEQUENCE
-          </button>
-        </div>
-
-        {/* Footer shortcuts */}
-        <div className="mt-6 text-center text-[10px] text-white/40 font-mono">
-          Press <span className="text-white/80 px-1 py-0.5 bg-white/10 rounded">H</span> for HUD, <span className="text-white/80 px-1 py-0.5 bg-white/10 rounded">1-7</span> for FX, <span className="text-white/80 px-1 py-0.5 bg-white/10 rounded">T</span> for Thermal, <span className="text-white/80 px-1 py-0.5 bg-white/10 rounded">SPACE</span> to Pause
+        <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", fontSize:"0.7rem", color:"rgba(255,255,255,0.55)" }}>
+          <div style={{ width:6, height:6, borderRadius:"50%", background:"#00f5ff", boxShadow:"0 0 8px #00f5ff", flexShrink:0, animation:"none" }} />
+          <span>{STEPS[stepIdx]?.label}{dots}</span>
         </div>
       </div>
+
+      {/* Feature list */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.5rem 1.5rem", fontSize:"0.65rem", color:"rgba(255,255,255,0.35)", maxWidth:340 }}>
+        {["21-point Hand Tracking","Real-time Gesture Engine","Three.js 3D Renderer","Synthesized Audio FX",
+          "GPU/CPU Auto-fallback","Touchless Navigation","3D Molecule Inspector","AR Shader Lab"].map(f => (
+          <div key={f} style={{ display:"flex", alignItems:"center", gap:"0.35rem" }}>
+            <div style={{ width:4, height:4, borderRadius:"50%", background:"rgba(0,245,255,0.4)", flexShrink:0 }} />
+            {f}
+          </div>
+        ))}
+      </div>
+
+      <p style={{ margin:0, fontSize:"0.62rem", color:"rgba(255,255,255,0.2)", textAlign:"center", maxWidth:300 }}>
+        All processing runs 100% locally on your device.<br/>No video is ever uploaded or transmitted.
+      </p>
     </div>
   );
 };
