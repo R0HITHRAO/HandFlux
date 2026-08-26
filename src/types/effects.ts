@@ -1,4 +1,5 @@
-export type AppMode = 'PRESENTATION' | 'VIEWER_3D' | 'AR_LAB';
+import { AppMode } from './gestures';
+export type { AppMode };
 
 export enum VisualEffectState {
   NONE = 'NONE',
