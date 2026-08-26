@@ -138,6 +138,19 @@ export class TechnicalHUDCanvas {
           ctx.stroke();
         }
       }
+      // E. Laser Ray Indicator when pointing
+      if (gestures.isPointing && gestures.pointerPosition) {
+        const pX = gestures.pointerPosition.screenX;
+        const pY = gestures.pointerPosition.screenY;
+        ctx.strokeStyle = 'rgba(255, 0, 85, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(indexTip.screenX, indexTip.screenY);
+        ctx.lineTo(pX, pY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // 2. AR OBJECT SELECTION BRACKETS (Only in AR Mode)
