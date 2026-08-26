@@ -311,9 +311,9 @@ export const MainView: React.FC = () => {
     hudCanvas: { position: 'absolute' as const, inset: 0, zIndex: 20, pointerEvents: 'none' as const },
     topBar: { position: 'fixed' as const, top: '1rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9000, pointerEvents: 'auto' as const },
     statusBanner: { position: 'fixed' as const, top: '5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9001, pointerEvents: 'auto' as const },
-    modePanel: { position: 'fixed' as const, top: '5rem', right: '1.5rem', bottom: '5rem', zIndex: 8000, pointerEvents: 'auto' as const },
+    modePanel: { position: 'fixed' as const, top: '5rem', right: '1.25rem', bottom: '5rem', width: 360, maxWidth: '38vw', zIndex: 8000, pointerEvents: 'auto' as const, overflowY: 'auto' as const },
     debugPanel: { position: 'fixed' as const, top: '5rem', left: '1.5rem', zIndex: 8000 },
-    bottomBar: { position: 'fixed' as const, bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9000, pointerEvents: 'auto' as const },
+    bottomBar: { position: 'fixed' as const, bottom: '1.25rem', left: '50%', transform: 'translateX(-50%)', zIndex: 9000, pointerEvents: 'auto' as const },
   };
 
   return (

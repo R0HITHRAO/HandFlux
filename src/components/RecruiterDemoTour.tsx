@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { AppMode } from '../types/gestures';
-import { Play, Sparkles, X, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { AppMode } from "../types/gestures";
+import { Sparkles, X } from "lucide-react";
 
 interface RecruiterDemoTourProps {
   isActive: boolean;
@@ -8,58 +8,52 @@ interface RecruiterDemoTourProps {
   onSetMode: (mode: AppMode) => void;
 }
 
+const STAGES = [
+  { from: 0,  to: 10, label: "STAGE 1: LIVE 21-LANDMARK HAND TRACKING" },
+  { from: 10, to: 30, label: "STAGE 2: 3D MOLECULAR MANIPULATION & INSPECTION" },
+  { from: 30, to: 50, label: "STAGE 3: TOUCHLESS PRESENTATION & LASER POINTER" },
+  { from: 50, to: 75, label: "STAGE 4: AR SHADER LAB & 60 FPS BENCHMARKS" },
+];
+
 export const RecruiterDemoTour: React.FC<RecruiterDemoTourProps> = ({ isActive, onStop, onSetMode }) => {
-  const [progressSec, setProgressSec] = useState<number>(0);
+  const [sec, setSec] = useState(0);
 
   useEffect(() => {
-    if (!isActive) {
-      setProgressSec(0);
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setProgressSec(prev => {
+    if (!isActive) { setSec(0); return; }
+    const id = setInterval(() => {
+      setSec(prev => {
         const next = prev + 1;
-        if (next === 10) onSetMode('VIEWER_3D');
-        if (next === 30) onSetMode('PRESENTATION');
-        if (next === 50) onSetMode('AR_LAB');
-        if (next >= 75) {
-          onStop();
-          return 0;
-        }
+        if (next === 10) onSetMode("VIEWER_3D");
+        if (next === 30) onSetMode("PRESENTATION");
+        if (next === 50) onSetMode("AR_LAB");
+        if (next >= 75) { onStop(); return 0; }
         return next;
       });
     }, 1000);
-
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [isActive, onSetMode, onStop]);
 
   if (!isActive) return null;
 
-  let currentStage = 'STAGE 1: LIVE 21-LANDMARK HAND TRACKING (0-10s)';
-  if (progressSec >= 10 && progressSec < 30) currentStage = 'STAGE 2: 3D MOLECULAR MANIPULATION & INSPECTION (10-30s)';
-  if (progressSec >= 30 && progressSec < 50) currentStage = 'STAGE 3: TOUCHLESS PRESENTATION SWIPE & LASER POINTER (30-50s)';
-  if (progressSec >= 50) currentStage = 'STAGE 4: AR SHADER LAB & 60 FPS BENCHMARKS (50-75s)';
+  const stage = STAGES.find(s => sec >= s.from && sec < s.to) || STAGES[STAGES.length - 1];
+  const pct = (sec / 75) * 100;
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-black/90 backdrop-blur-xl border border-pink-500/50 rounded-2xl px-6 py-4 shadow-2xl max-w-xl w-full text-white font-mono space-y-2.5 pointer-events-auto animate-in fade-in duration-300">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2.5 text-pink-400 font-bold text-xs">
-          <Sparkles className="w-4 h-4 animate-spin" />
-          <span>RECRUITER GUIDED TOUR IN PROGRESS</span>
+    <div style={{ position:"fixed", top:"5rem", left:"50%", transform:"translateX(-50%)", zIndex:9500, background:"rgba(0,0,0,0.92)", backdropFilter:"blur(16px)", border:"1.5px solid rgba(236,72,153,0.5)", borderRadius:"1rem", padding:"1rem 1.25rem", boxShadow:"0 20px 50px rgba(0,0,0,0.9)", maxWidth:480, width:"90vw", fontFamily:"monospace", color:"#fff", pointerEvents:"auto" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.5rem" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"0.4rem", color:"#f472b6", fontWeight:"bold", fontSize:"0.7rem" }}>
+          <Sparkles size={13} />
+          RECRUITER GUIDED TOUR IN PROGRESS
         </div>
-        <button onClick={onStop} className="text-white/50 hover:text-white"><X className="w-4 h-4" /></button>
+        <button onClick={onStop} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)", display:"flex", alignItems:"center" }}>
+          <X size={15} />
+        </button>
       </div>
-
-      <div className="text-xs font-bold text-cyan-300">{currentStage}</div>
-
-      <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-        <div
-          className="bg-gradient-to-r from-cyan-400 to-pink-500 h-full transition-all duration-1000"
-          style={{ width: `${(progressSec / 75) * 100}%` }}
-        />
+      <div style={{ fontSize:"0.7rem", color:"#67e8f9", fontWeight:"bold", marginBottom:"0.5rem" }}>{stage.label}</div>
+      <div style={{ background:"rgba(255,255,255,0.1)", borderRadius:9999, height:6, overflow:"hidden", marginBottom:"0.35rem" }}>
+        <div style={{ width:`${pct}%`, height:"100%", background:"linear-gradient(90deg,#06b6d4,#ec4899)", transition:"width 1s linear" }} />
       </div>
-      <div className="text-[10px] text-white/50 text-right">{progressSec}s / 75s</div>
+      <div style={{ fontSize:"0.65rem", color:"rgba(255,255,255,0.45)", textAlign:"right" }}>{sec}s / 75s</div>
     </div>
   );
 };
