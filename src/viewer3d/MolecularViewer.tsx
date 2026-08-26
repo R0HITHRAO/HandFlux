@@ -12,7 +12,6 @@ interface MolecularViewerProps {
 
 export const MolecularViewer: React.FC<MolecularViewerProps> = ({
   activeAtom,
-  gestures,
   currentMolecule,
   onSelectMolecule
 }) => {
@@ -24,22 +23,22 @@ export const MolecularViewer: React.FC<MolecularViewerProps> = ({
   ];
 
   return (
-    <div className="absolute inset-0 z-20 pointer-events-none p-6 flex flex-col justify-between select-none overflow-hidden">
+    <div className="fixed inset-0 z-20 pointer-events-none p-6 flex flex-col justify-between select-none overflow-hidden">
       {/* Top Molecule Switcher Pill (Docked neatly below top navbar) */}
-      <div className="flex justify-center pt-14 pointer-events-auto">
-        <div className="flex items-center space-x-1.5 bg-black/90 backdrop-blur-2xl border border-purple-500/40 p-1.5 rounded-2xl shadow-2xl">
+      <div className="flex justify-center pt-16 pointer-events-auto">
+        <div className="flex items-center space-x-2 bg-black/95 backdrop-blur-2xl border-2 border-purple-500/50 p-2 rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.9)]">
           {molecules.map(m => (
             <button
               key={m.id}
               onClick={() => onSelectMolecule(m.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold transition-all ${
                 currentMolecule === m.id
-                  ? 'bg-purple-600 text-white shadow-[0_0_12px_#a855f7] scale-105'
+                  ? 'bg-purple-600 text-white shadow-[0_0_15px_#a855f7] scale-105'
                   : 'text-white/70 hover:text-white hover:bg-white/10'
               }`}
             >
               <span>{m.label}</span>
-              <span className="ml-1.5 text-[10px] text-purple-300/80 font-normal">({m.formula})</span>
+              <span className="ml-1.5 text-[10px] text-purple-300 font-semibold">({m.formula})</span>
             </button>
           ))}
         </div>
@@ -47,13 +46,13 @@ export const MolecularViewer: React.FC<MolecularViewerProps> = ({
 
       {/* Right-Hand Atom Inspector Panel */}
       {activeAtom && (
-        <div className="absolute right-8 top-28 bg-black/90 backdrop-blur-2xl border-2 border-cyan-500/50 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.9)] max-w-xs w-full text-white font-mono space-y-3 pointer-events-auto animate-in fade-in slide-in-from-right duration-200">
+        <div className="absolute right-8 top-32 bg-black/95 backdrop-blur-2xl border-2 border-cyan-500/60 rounded-3xl p-5 shadow-[0_25px_60px_rgba(0,0,0,0.95)] max-w-xs w-full text-white font-mono space-y-3 pointer-events-auto animate-in fade-in slide-in-from-right duration-200">
           <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
             <div className="flex items-center space-x-2">
               <Atom className="w-5 h-5 text-cyan-400" />
               <span className="font-bold text-sm text-cyan-300">{activeAtom.name}</span>
             </div>
-            <span className="text-xs px-2.5 py-0.5 bg-cyan-950 border border-cyan-400/60 rounded-lg text-cyan-200 font-bold shadow-[0_0_8px_#00f5ff]">
+            <span className="text-xs px-2.5 py-0.5 bg-cyan-950 border border-cyan-400/80 rounded-lg text-cyan-200 font-bold shadow-[0_0_10px_#00f5ff]">
               {activeAtom.element}
             </span>
           </div>
@@ -68,7 +67,7 @@ export const MolecularViewer: React.FC<MolecularViewerProps> = ({
       )}
 
       {/* Bottom Gesture Controls Guide */}
-      <div className="max-w-md mx-auto w-full bg-black/90 backdrop-blur-2xl border border-white/20 rounded-2xl p-3.5 shadow-2xl flex items-center justify-around font-mono text-xs text-white/80 pointer-events-auto">
+      <div className="max-w-md mx-auto w-full bg-black/95 backdrop-blur-2xl border-2 border-white/25 rounded-2xl p-4 shadow-[0_15px_35px_rgba(0,0,0,0.9)] flex items-center justify-around font-mono text-xs text-white/90 pointer-events-auto mb-2">
         <div className="flex items-center space-x-2 text-cyan-300">
           <Move className="w-4 h-4" />
           <span>Pinch: Move</span>
