@@ -30,7 +30,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
   };
 
   return (
-    <header className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center space-x-3 bg-black/95 backdrop-blur-2xl border-2 border-white/25 px-4 py-2 rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.9)] pointer-events-auto select-none max-w-[95vw]">
+    <header style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'rgba(0,0,0,0.95)', backdropFilter:'blur(24px)', border:'2px solid rgba(255,255,255,0.25)', padding:'0.5rem 1rem', borderRadius:'1rem', boxShadow:'0 15px 35px rgba(0,0,0,0.9)', pointerEvents:'auto', userSelect:'none', maxWidth:'95vw', whiteSpace:'nowrap' }}>
       {/* Project Logo */}
       <div className="px-3 py-1 text-xs font-mono font-black tracking-widest text-cyan-400 border-r border-white/20 flex items-center space-x-2">
         <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00f5ff]" />
