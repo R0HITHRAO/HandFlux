@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+export type MoleculeType = 'CAFFEINE' | 'BENZENE' | 'ETHANOL' | 'WATER';
+
 export interface AtomData {
   element: string;
   name: string;
@@ -16,42 +18,80 @@ export class MolecularScene {
   private atomMeshes: { mesh: THREE.Mesh; data: AtomData }[] = [];
   private highlightedMesh: THREE.Mesh | null = null;
   private orbitalRing: THREE.Line | null = null;
+  private currentMolecule: MoleculeType = 'CAFFEINE';
 
   constructor() {
     this.group = new THREE.Group();
-    this.buildCaffeineMolecule();
+    this.loadMolecule('CAFFEINE');
   }
 
-  private buildCaffeineMolecule(): void {
-    const atoms: AtomData[] = [
-      // Carbon Atoms (Charcoal Slate with Metallic Luster)
-      { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-0.7, 0.7, 0), hybridization: 'sp2', valence: 4 },
-      { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.7, 0.7, 0), hybridization: 'sp2', valence: 4 },
-      { element: 'C', name: 'Carbon (Carbonyl)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(1.3, -0.4, 0), hybridization: 'sp2', valence: 4 },
-      { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.0, -1.2, 0), hybridization: 'sp2', valence: 4 },
-      { element: 'C', name: 'Carbon (Methyl)', atomicNumber: 6, color: 0x475569, radius: 0.25, position: new THREE.Vector3(-1.9, 1.4, 0), hybridization: 'sp3', valence: 4 },
-      { element: 'C', name: 'Carbon (Methyl)', atomicNumber: 6, color: 0x475569, radius: 0.25, position: new THREE.Vector3(1.9, 1.4, 0), hybridization: 'sp3', valence: 4 },
+  public loadMolecule(type: MoleculeType): void {
+    this.currentMolecule = type;
+    while (this.group.children.length > 0) {
+      this.group.remove(this.group.children[0]);
+    }
+    this.atomMeshes = [];
+    this.highlightedMesh = null;
 
-      // Nitrogen Atoms (Electric Blue)
-      { element: 'N', name: 'Nitrogen (Amide)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(-1.2, -0.4, 0), hybridization: 'sp2', valence: 3 },
-      { element: 'N', name: 'Nitrogen (Ring)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(0.0, 1.4, 0), hybridization: 'sp2', valence: 3 },
-      { element: 'N', name: 'Nitrogen (Imidaz)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(-0.7, -1.9, 0), hybridization: 'sp2', valence: 3 },
+    let atoms: AtomData[] = [];
 
-      // Oxygen Atoms (Vibrant Crimson)
-      { element: 'O', name: 'Oxygen (Carbonyl)', atomicNumber: 8, color: 0xef4444, radius: 0.30, position: new THREE.Vector3(2.4, -0.6, 0), hybridization: 'sp2', valence: 2 },
-      { element: 'O', name: 'Oxygen (Carbonyl)', atomicNumber: 8, color: 0xef4444, radius: 0.30, position: new THREE.Vector3(-0.1, -2.5, 0), hybridization: 'sp2', valence: 2 },
-
-      // Hydrogen Atoms (Clean White)
-      { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-2.5, 1.2, 0.6), hybridization: 's', valence: 1 },
-      { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.9, 2.3, -0.4), hybridization: 's', valence: 1 },
-      { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(2.5, 1.2, -0.5), hybridization: 's', valence: 1 }
-    ];
+    if (type === 'BENZENE') {
+      atoms = [
+        { element: 'C', name: 'Carbon 1', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(1.2, 0, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon 2', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.6, 1.04, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon 3', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-0.6, 1.04, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon 4', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-1.2, 0, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon 5', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-0.6, -1.04, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon 6', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.6, -1.04, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'H', name: 'Hydrogen 1', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(2.1, 0, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 2', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(1.05, 1.82, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 3', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.05, 1.82, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 4', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-2.1, 0, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 5', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.05, -1.82, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 6', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(1.05, -1.82, 0), hybridization: 's', valence: 1 }
+      ];
+    } else if (type === 'ETHANOL') {
+      atoms = [
+        { element: 'C', name: 'Methyl Carbon', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-1.1, 0, 0), hybridization: 'sp3', valence: 4 },
+        { element: 'C', name: 'Methylene Carbon', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.3, 0.4, 0), hybridization: 'sp3', valence: 4 },
+        { element: 'O', name: 'Hydroxyl Oxygen', atomicNumber: 8, color: 0xef4444, radius: 0.30, position: new THREE.Vector3(1.3, -0.5, 0), hybridization: 'sp3', valence: 2 },
+        { element: 'H', name: 'Hydroxyl Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(2.1, -0.2, 0.3), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Methyl Hydrogen 1', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.5, -0.6, 0.7), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Methyl Hydrogen 2', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.5, 0.9, 0.4), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Methyl Hydrogen 3', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.2, -0.3, -0.9), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Methylene Hydrogen 1', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(0.4, 1.1, -0.7), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Methylene Hydrogen 2', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(0.4, 0.9, 0.8), hybridization: 's', valence: 1 }
+      ];
+    } else if (type === 'WATER') {
+      atoms = [
+        { element: 'O', name: 'Oxygen', atomicNumber: 8, color: 0xef4444, radius: 0.35, position: new THREE.Vector3(0, 0.2, 0), hybridization: 'sp3', valence: 2 },
+        { element: 'H', name: 'Hydrogen 1', atomicNumber: 1, color: 0xffffff, radius: 0.22, position: new THREE.Vector3(-0.8, -0.4, 0), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen 2', atomicNumber: 1, color: 0xffffff, radius: 0.22, position: new THREE.Vector3(0.8, -0.4, 0), hybridization: 's', valence: 1 }
+      ];
+    } else {
+      // CAFFEINE
+      atoms = [
+        { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(-0.7, 0.7, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.7, 0.7, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon (Carbonyl)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(1.3, -0.4, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon (C-Ring)', atomicNumber: 6, color: 0x475569, radius: 0.28, position: new THREE.Vector3(0.0, -1.2, 0), hybridization: 'sp2', valence: 4 },
+        { element: 'C', name: 'Carbon (Methyl)', atomicNumber: 6, color: 0x475569, radius: 0.25, position: new THREE.Vector3(-1.9, 1.4, 0), hybridization: 'sp3', valence: 4 },
+        { element: 'C', name: 'Carbon (Methyl)', atomicNumber: 6, color: 0x475569, radius: 0.25, position: new THREE.Vector3(1.9, 1.4, 0), hybridization: 'sp3', valence: 4 },
+        { element: 'N', name: 'Nitrogen (Amide)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(-1.2, -0.4, 0), hybridization: 'sp2', valence: 3 },
+        { element: 'N', name: 'Nitrogen (Ring)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(0.0, 1.4, 0), hybridization: 'sp2', valence: 3 },
+        { element: 'N', name: 'Nitrogen (Imidaz)', atomicNumber: 7, color: 0x3b82f6, radius: 0.29, position: new THREE.Vector3(-0.7, -1.9, 0), hybridization: 'sp2', valence: 3 },
+        { element: 'O', name: 'Oxygen (Carbonyl)', atomicNumber: 8, color: 0xef4444, radius: 0.30, position: new THREE.Vector3(2.4, -0.6, 0), hybridization: 'sp2', valence: 2 },
+        { element: 'O', name: 'Oxygen (Carbonyl)', atomicNumber: 8, color: 0xef4444, radius: 0.30, position: new THREE.Vector3(-0.1, -2.5, 0), hybridization: 'sp2', valence: 2 },
+        { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-2.5, 1.2, 0.6), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(-1.9, 2.3, -0.4), hybridization: 's', valence: 1 },
+        { element: 'H', name: 'Hydrogen', atomicNumber: 1, color: 0xffffff, radius: 0.18, position: new THREE.Vector3(2.5, 1.2, -0.5), hybridization: 's', valence: 1 }
+      ];
+    }
 
     const sphereGeo = new THREE.SphereGeometry(1, 28, 28);
     const cylinderGeo = new THREE.CylinderGeometry(0.07, 0.07, 1, 14);
     const bondMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.4, roughness: 0.2 });
 
-    // Create Atoms with High-Spec PBR Materials
     atoms.forEach(atom => {
       const mat = new THREE.MeshStandardMaterial({
         color: atom.color,
@@ -68,7 +108,6 @@ export class MolecularScene {
       this.atomMeshes.push({ mesh, data: atom });
     });
 
-    // Create Bonds
     for (let i = 0; i < atoms.length; i++) {
       for (let j = i + 1; j < atoms.length; j++) {
         const d = atoms[i].position.distanceTo(atoms[j].position);
@@ -85,7 +124,6 @@ export class MolecularScene {
       }
     }
 
-    // Glowing Orbital Rings
     const ringGeo = new THREE.RingGeometry(2.8, 2.85, 48);
     const ringMat = new THREE.LineBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.35 });
     const ring = new THREE.Line(ringGeo, ringMat);

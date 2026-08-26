@@ -13,7 +13,7 @@ import { ControlBar } from './ControlBar';
 import { ModeSelector } from './ModeSelector';
 import { PresentationView } from '../presentation/PresentationView';
 import { PresentationController } from '../presentation/PresentationController';
-import { MolecularScene, AtomData } from '../viewer3d/MolecularScene';
+import { MolecularScene, AtomData, MoleculeType } from '../viewer3d/MolecularScene';
 import { MolecularViewer } from '../viewer3d/MolecularViewer';
 import { CalibrationModal } from '../calibration/CalibrationModal';
 import { SettingsModal } from '../settings/SettingsModal';
@@ -48,7 +48,9 @@ export const MainView: React.FC = () => {
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
+  // Mode States
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+  const [currentMolecule, setCurrentMolecule] = useState<MoleculeType>('CAFFEINE');
   const [activeAtom, setActiveAtom] = useState<AtomData | null>(null);
 
   const [isCalibrationOpen, setIsCalibrationOpen] = useState<boolean>(false);
@@ -265,7 +267,7 @@ export const MainView: React.FC = () => {
       }
       const updateEnd = performance.now();
 
-      // Stage 2: 2D HUD Canvas Render (Clean, uncluttered, no overlapping text)
+      // Stage 2: 2D HUD Canvas Render
       const renderPassStart = performance.now();
       if (hudRef.current && showHUD && sceneManagerRef.current) {
         const objects = activeMode === 'AR_LAB' ? sceneManagerRef.current.arobjectManager.getObjects() : [];
@@ -385,7 +387,15 @@ export const MainView: React.FC = () => {
 
       {/* MODE 2: 3D MOLECULAR VIEWER OVERLAY */}
       {activeMode === 'VIEWER_3D' && (
-        <MolecularViewer activeAtom={activeAtom} gestures={latestGestures} />
+        <MolecularViewer
+          activeAtom={activeAtom}
+          gestures={latestGestures}
+          currentMolecule={currentMolecule}
+          onSelectMolecule={(molType) => {
+            setCurrentMolecule(molType);
+            molecularSceneRef.current?.loadMolecule(molType);
+          }}
+        />
       )}
 
       {/* MODE 3: AR LAB CONTROLS */}
