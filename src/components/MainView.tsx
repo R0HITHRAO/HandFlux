@@ -11,6 +11,7 @@ import { PerformanceMetrics } from '../types/performance';
 import { AppMode, GestureMetrics } from '../types/gestures';
 import { ControlBar } from './ControlBar';
 import { ModeSelector } from './ModeSelector';
+import { StartupScreen } from './StartupScreen';
 import { PresentationView } from '../presentation/PresentationView';
 import { PresentationController } from '../presentation/PresentationController';
 import { MolecularScene, AtomData, MoleculeType } from '../viewer3d/MolecularScene';
@@ -19,7 +20,6 @@ import { CalibrationModal } from '../calibration/CalibrationModal';
 import { SettingsModal } from '../settings/SettingsModal';
 import { RecruiterDemoTour } from './RecruiterDemoTour';
 import { captureCanvasScreenshot } from '../utils/recording';
-import { screenToThreeWorld } from '../utils/mathUtils';
 import { audioService } from '../utils/audioService';
 import * as THREE from 'three';
 
@@ -48,6 +48,7 @@ export const MainView: React.FC = () => {
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
+  const [isStarting, setIsStarting] = useState(true);
   const [cameraStatus, setCameraStatus] = useState<'INITIALIZING' | 'ACTIVE' | 'ERROR'>('INITIALIZING');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
@@ -78,11 +79,14 @@ export const MainView: React.FC = () => {
         await cameraManagerRef.current.attachToVideo(videoRef.current);
         setCameraStatus('ACTIVE');
         setErrorMessage('');
+        // Dismiss startup screen after loading animation completes (~4s)
+        setTimeout(() => setIsStarting(false), 4000);
       }
     } catch (err: any) {
       console.warn('Camera start error:', err);
       setCameraStatus('ERROR');
       setErrorMessage(err.message || 'Camera permission required');
+      setIsStarting(false);
     }
   };
 
@@ -326,6 +330,22 @@ export const MainView: React.FC = () => {
 
       {/* LAYER 2: 2D HUD CANVAS */}
       <canvas ref={hudCanvasRef} style={S.hudCanvas} />
+
+      {/* STARTUP LOADING SCREEN */}
+      <StartupScreen isVisible={isStarting} />
+
+      {/* LIVE GESTURE STATUS PILL — bottom-left */}
+      {!isStarting && cameraStatus === 'ACTIVE' && (
+        <div style={{ position:'fixed', bottom:'1.25rem', left:'1.25rem', zIndex:8000, display:'flex', alignItems:'center', gap:'0.4rem', background:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'0.6rem', padding:'0.35rem 0.65rem', fontFamily:'monospace', fontSize:'0.62rem', color:'rgba(255,255,255,0.55)', pointerEvents:'none' }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background: latestGestures.primaryGesture !== 'NONE' ? '#4ade80' : 'rgba(255,255,255,0.2)', boxShadow: latestGestures.primaryGesture !== 'NONE' ? '0 0 6px #4ade80' : 'none', transition:'all 0.2s' }} />
+          <span style={{ color: latestGestures.primaryGesture !== 'NONE' ? '#86efac' : 'rgba(255,255,255,0.4)' }}>
+            {latestGestures.primaryGesture !== 'NONE' ? latestGestures.primaryGesture : 'NO HAND'}
+          </span>
+          {latestHandsRef.current.length > 0 && (
+            <span style={{ color:'rgba(255,255,255,0.3)', marginLeft:'0.2rem' }}>· {latestHandsRef.current.length} hand{latestHandsRef.current.length > 1 ? 's' : ''}</span>
+          )}
+        </div>
+      )}
 
       {/* STATUS BANNER */}
       {cameraStatus === 'INITIALIZING' && (
