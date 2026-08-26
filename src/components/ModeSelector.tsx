@@ -1,93 +1,110 @@
 import React from 'react';
 import { AppMode } from '../types/gestures';
-import { Presentation, Atom, Sparkles, PlayCircle, Settings, HelpCircle } from 'lucide-react';
+import { Presentation, Atom, Sparkles, PlayCircle, Settings, HelpCircle, Activity } from 'lucide-react';
 
 interface ModeSelectorProps {
   activeMode: AppMode;
+  showDebug: boolean;
   onSelectMode: (mode: AppMode) => void;
   onStartTour: () => void;
   onOpenCalibration: () => void;
   onOpenSettings: () => void;
+  onToggleDebug: () => void;
 }
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({
   activeMode,
+  showDebug,
   onSelectMode,
   onStartTour,
   onOpenCalibration,
-  onOpenSettings
+  onOpenSettings,
+  onToggleDebug
 }) => {
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center space-x-2 bg-black/85 backdrop-blur-md border border-white/20 p-1.5 rounded-2xl shadow-2xl pointer-events-auto select-none">
-      {/* Logo */}
-      <div className="px-3 py-1 text-xs font-mono font-black tracking-wider text-cyan-400 border-r border-white/10 flex items-center space-x-1.5">
+    <header className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center space-x-2.5 bg-black/90 backdrop-blur-2xl border border-white/20 p-2 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] pointer-events-auto select-none max-w-[95vw]">
+      {/* Project Logo */}
+      <div className="px-3.5 py-1.5 text-xs font-mono font-black tracking-widest text-cyan-400 border-r border-white/15 flex items-center space-x-2">
+        <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00f5ff]" />
         <span>HANDFLUX</span>
       </div>
 
-      {/* Modes */}
-      <button
-        onClick={() => onSelectMode('PRESENTATION')}
-        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
-          activeMode === 'PRESENTATION'
-            ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/40 scale-105'
-            : 'text-white/70 hover:text-white hover:bg-white/10'
-        }`}
-      >
-        <Presentation className="w-3.5 h-3.5" />
-        <span>PRESENTATION</span>
-      </button>
+      {/* Mode Switches */}
+      <nav className="flex items-center space-x-1.5">
+        <button
+          onClick={() => onSelectMode('PRESENTATION')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
+            activeMode === 'PRESENTATION'
+              ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,245,255,0.6)] scale-105'
+              : 'text-white/80 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Presentation className="w-4 h-4" />
+          <span>PRESENTATION</span>
+        </button>
 
-      <button
-        onClick={() => onSelectMode('VIEWER_3D')}
-        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
-          activeMode === 'VIEWER_3D'
-            ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/40 scale-105'
-            : 'text-white/70 hover:text-white hover:bg-white/10'
-        }`}
-      >
-        <Atom className="w-3.5 h-3.5" />
-        <span>3D MOLECULE</span>
-      </button>
+        <button
+          onClick={() => onSelectMode('VIEWER_3D')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
+            activeMode === 'VIEWER_3D'
+              ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.6)] scale-105'
+              : 'text-white/80 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Atom className="w-4 h-4" />
+          <span>3D MOLECULE</span>
+        </button>
 
-      <button
-        onClick={() => onSelectMode('AR_LAB')}
-        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
-          activeMode === 'AR_LAB'
-            ? 'bg-pink-600 text-white shadow-lg shadow-pink-500/40 scale-105'
-            : 'text-white/70 hover:text-white hover:bg-white/10'
-        }`}
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        <span>AR VISUAL LAB</span>
-      </button>
+        <button
+          onClick={() => onSelectMode('AR_LAB')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold flex items-center space-x-1.5 transition-all ${
+            activeMode === 'AR_LAB'
+              ? 'bg-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.6)] scale-105'
+              : 'text-white/80 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>AR VISUAL LAB</span>
+        </button>
+      </nav>
 
       <div className="w-[1px] h-5 bg-white/20" />
 
-      {/* Tour & Calibration */}
-      <button
-        onClick={onStartTour}
-        className="px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold bg-gradient-to-r from-pink-500 to-rose-600 text-white hover:opacity-90 flex items-center space-x-1 shadow-md shadow-pink-500/30"
-        title="Run 75-second automated recruiter interview tour"
-      >
-        <PlayCircle className="w-3.5 h-3.5" />
-        <span>TOUR</span>
-      </button>
+      {/* Tour & Tools */}
+      <div className="flex items-center space-x-1">
+        <button
+          onClick={onStartTour}
+          className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-400 hover:to-rose-500 text-white flex items-center space-x-1.5 shadow-[0_0_15px_rgba(244,63,94,0.5)] transition-all active:scale-95"
+          title="75s Recruiter Guided Tour"
+        >
+          <PlayCircle className="w-4 h-4" />
+          <span>TOUR</span>
+        </button>
 
-      <button
-        onClick={onOpenCalibration}
-        className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-xl"
-        title="Interface Calibration"
-      >
-        <HelpCircle className="w-4 h-4" />
-      </button>
+        <button
+          onClick={onToggleDebug}
+          className={`p-2 rounded-xl text-xs font-mono transition-all ${showDebug ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+          title="Toggle Performance HUD (D)"
+        >
+          <Activity className="w-4 h-4" />
+        </button>
 
-      <button
-        onClick={onOpenSettings}
-        className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-xl"
-        title="Settings & Privacy"
-      >
-        <Settings className="w-4 h-4" />
-      </button>
-    </div>
+        <button
+          onClick={onOpenCalibration}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+          title="Interface Calibration"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={onOpenSettings}
+          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+          title="Settings & Privacy"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
+    </header>
   );
 };

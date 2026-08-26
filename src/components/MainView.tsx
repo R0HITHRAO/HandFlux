@@ -39,11 +39,12 @@ export const MainView: React.FC = () => {
 
   const latestHandsRef = useRef<HandLandmarks[]>([]);
 
+  // Application States
   const [activeMode, setActiveMode] = useState<AppMode>('PRESENTATION');
   const [activeTool, setActiveTool] = useState<VisualEffectState>(VisualEffectState.NONE);
   const [objectCount, setObjectCount] = useState<number>(0);
   const [showHUD, setShowHUD] = useState(true);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<string>('INITIALIZING...');
   const [videoDimensions, setVideoDimensions] = useState<string>('0 x 0');
 
@@ -264,10 +265,10 @@ export const MainView: React.FC = () => {
       }
       const updateEnd = performance.now();
 
-      // Stage 2: 2D HUD Canvas Render
+      // Stage 2: 2D HUD Canvas Render (Clean, uncluttered, no overlapping text)
       const renderPassStart = performance.now();
       if (hudRef.current && showHUD && sceneManagerRef.current) {
-        const objects = sceneManagerRef.current.arobjectManager.getObjects();
+        const objects = activeMode === 'AR_LAB' ? sceneManagerRef.current.arobjectManager.getObjects() : [];
         const selected = sceneManagerRef.current.arobjectManager.getSelectedObject();
         const metrics = perfMonitorRef.current.getMetrics();
         hudRef.current.render(
@@ -277,7 +278,7 @@ export const MainView: React.FC = () => {
           objects,
           selected ? selected.id : null,
           pinchHoldProgress,
-          { showLandmarks: true, showCoordinates: true, showGuides: true, showReticles: true, showBoundingBox: true },
+          { showLandmarks: true, showCoordinates: false, showGuides: false, showReticles: false, showBoundingBox: false },
           metrics,
           timestamp * 0.001
         );
@@ -346,19 +347,21 @@ export const MainView: React.FC = () => {
       {/* LAYER 1: THREE.JS 3D CANVAS (MOLECULE & AR OBJECTS) */}
       <div ref={arContainerRef} className="absolute inset-0 z-10 pointer-events-none" />
 
-      {/* LAYER 2: 2D HUD CANVAS (LANDMARKS, SKELETON, METER, FPS) */}
+      {/* LAYER 2: 2D HUD CANVAS (NEON SKELETON, RED JOINTS, LASER POINT) */}
       <canvas ref={hudCanvasRef} className="absolute inset-0 z-20 pointer-events-none" />
 
-      {/* MODE SELECTOR (TOP NAVBAR) */}
+      {/* MODE SELECTOR (TOP FLOATING NAVBAR) */}
       <ModeSelector
         activeMode={activeMode}
+        showDebug={showDebug}
         onSelectMode={handleSelectMode}
         onStartTour={() => setIsTourActive(true)}
         onOpenCalibration={() => setIsCalibrationOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onToggleDebug={() => setShowDebug(p => !p)}
       />
 
-      {/* MODE 1: PRESENTATION VIEW */}
+      {/* MODE 1: PRESENTATION VIEW (SIDE-DOCKED HOLOGRAPHIC HUD) */}
       {activeMode === 'PRESENTATION' && (
         <PresentationView
           slide={presentationRef.current.getCurrentSlide()}
@@ -419,6 +422,27 @@ export const MainView: React.FC = () => {
             else document.exitFullscreen().catch(() => {});
           }}
         />
+      )}
+
+      {/* COLLAPSIBLE PERFORMANCE TELEMETRY CARD (TRIGGERED BY 'D' OR ACTIVITY ICON) */}
+      {showDebug && (
+        <div className="absolute top-20 left-6 z-40 p-4 bg-black/90 backdrop-blur-2xl border border-cyan-500/50 rounded-2xl text-xs font-mono space-y-2 shadow-2xl text-white pointer-events-auto min-w-[240px] animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between border-b border-white/15 pb-1.5 font-bold text-cyan-400">
+            <span>STAGE TELEMETRY</span>
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-3 gap-1 py-1 text-center font-bold border-b border-white/10">
+            <div><div className="text-[9px] text-white/50">CAM</div><div className="text-emerald-400">{debugMetrics.cameraFps}</div></div>
+            <div><div className="text-[9px] text-white/50">VISION</div><div className="text-cyan-300">{debugMetrics.visionFps}</div></div>
+            <div><div className="text-[9px] text-white/50">RENDER</div><div className="text-pink-400">{debugMetrics.renderFps}</div></div>
+          </div>
+          <div className="space-y-1 py-1 text-[11px]">
+            <div className="flex justify-between"><span className="text-white/60">VISION TIME:</span> <span className="text-cyan-300">{debugMetrics.visionTimeMs} ms</span></div>
+            <div className="flex justify-between"><span className="text-white/60">UPDATE TIME:</span> <span className="text-yellow-300">{debugMetrics.arUpdateTimeMs} ms</span></div>
+            <div className="flex justify-between"><span className="text-white/60">RENDER TIME:</span> <span className="text-purple-300">{debugMetrics.renderTimeMs} ms</span></div>
+            <div className="flex justify-between font-bold"><span className="text-white/80">TOTAL FRAME:</span> <span className="text-green-400">{debugMetrics.totalFrameTimeMs} ms</span></div>
+          </div>
+        </div>
       )}
 
       {/* RECRUITER DEMO TOUR */}
